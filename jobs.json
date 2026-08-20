@@ -1,0 +1,145 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 96341648436,
+      "run_id": 32341597953,
+      "workflow_name": "Build iOS",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/1366214813/shanyun-app/actions/runs/32341597953",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOT-Rnvc8AAAAWbmjkNA",
+      "head_sha": "b5b78a073a05ba9a1a79bd4cb61f38e461d03966",
+      "url": "https://api.github.com/repos/1366214813/shanyun-app/actions/jobs/96341648436",
+      "html_url": "https://github.com/1366214813/shanyun-app/actions/runs/32341597953/job/96341648436",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-08-20T06:54:39Z",
+      "started_at": "2026-08-20T06:54:41Z",
+      "completed_at": "2026-08-20T06:55:22Z",
+      "name": "Build iOS (simulator, unsigned)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-08-20T06:54:42Z",
+          "completed_at": "2026-08-20T06:54:43Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-08-20T06:54:43Z",
+          "completed_at": "2026-08-20T06:54:46Z"
+        },
+        {
+          "name": "Setup Node",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-08-20T06:54:46Z",
+          "completed_at": "2026-08-20T06:54:47Z"
+        },
+        {
+          "name": "Install dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-08-20T06:54:47Z",
+          "completed_at": "2026-08-20T06:55:04Z"
+        },
+        {
+          "name": "Prebuild iOS project",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-08-20T06:55:04Z",
+          "completed_at": "2026-08-20T06:55:06Z"
+        },
+        {
+          "name": "Install CocoaPods",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-08-20T06:55:06Z",
+          "completed_at": "2026-08-20T06:55:09Z"
+        },
+        {
+          "name": "Pod install",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-08-20T06:55:09Z",
+          "completed_at": "2026-08-20T06:55:11Z"
+        },
+        {
+          "name": "Resolve scheme name",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-08-20T06:55:11Z",
+          "completed_at": "2026-08-20T06:55:14Z"
+        },
+        {
+          "name": "Build simulator .app",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-08-20T06:55:14Z",
+          "completed_at": "2026-08-20T06:55:16Z"
+        },
+        {
+          "name": "Locate .app bundle",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 10,
+          "started_at": "2026-08-20T06:55:16Z",
+          "completed_at": "2026-08-20T06:55:17Z"
+        },
+        {
+          "name": "Upload .app artifact",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 11,
+          "started_at": "2026-08-20T06:55:17Z",
+          "completed_at": "2026-08-20T06:55:17Z"
+        },
+        {
+          "name": "Post Setup Node",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 21,
+          "started_at": "2026-08-20T06:55:17Z",
+          "completed_at": "2026-08-20T06:55:17Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22,
+          "started_at": "2026-08-20T06:55:17Z",
+          "completed_at": "2026-08-20T06:55:18Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-08-20T06:55:18Z",
+          "completed_at": "2026-08-20T06:55:19Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/1366214813/shanyun-app/check-runs/96341648436",
+      "labels": [
+        "macos-14"
+      ],
+      "runner_id": 1000000174,
+      "runner_name": "GitHub Actions 1000000174",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

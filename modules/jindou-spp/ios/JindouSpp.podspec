@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.description   = 'Bluetooth SPP bridge for HM-T260LR printer. Classic Bluetooth SPP is not available on iOS; exposes nativeSupport=false so JS falls back to BLE.'
   s.homepage      = 'https://github.com/1366214813/shanyun-app'
   s.license       = package['license']
-  s.author        = package['author']
+  s.author        = { 'shanyun' => 'shanyun@local' }
   s.platforms     = { :ios => '16.4' }
   s.swift_version = '5.9'
   s.source        = { path: '.' }
