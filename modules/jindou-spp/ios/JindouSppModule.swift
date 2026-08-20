@@ -8,7 +8,7 @@ public class JindouSppModule: Module {
       false
     }
 
-    AsyncFunction("listBondedDevices") { () -> [] in
+    AsyncFunction("listBondedDevices") { () -> [Any] in
       throw SppNotSupportedError()
     }
 
