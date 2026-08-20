@@ -35,21 +35,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Prebuild iOS project
+- name: Prebuild iOS project
         run: npx expo prebuild --platform ios --no-install
-
-      - name: Lower Swift tools version for Xcode 16.4 compat
-        run: |
-          sed -i '' 's/swift-tools-version: 6\.2/swift-tools-version: 6.1/' node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift
-          sed -i '' 's/swift-tools-version: 6\.2/swift-tools-version: 6.1/' node_modules/expo-modules-jsi/apple/Package.swift
-          grep -rn "swift-tools-version" node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift node_modules/expo-modules-jsi/apple/Package.swift
 
       - name: Pod install
         working-directory: ios
         run: |
           pod install
           ls -la
-          ls -la *.xcworkspace
+
+      - name: Lower Swift tools version for Xcode 16.4 compat
+        run: |
+          find . -name Package.swift -path '*node_modules*' -exec sed -i '' 's/swift-tools-version: 6\.2/swift-tools-version: 6.1/' {} +
+          find ios -name Package.swift -exec sed -i '' 's/swift-tools-version: 6\.2/swift-tools-version: 6.1/' {} +
+          find . -name Package.swift -exec grep -l "swift-tools-version: 6.2" {} + && exit 1 || echo "OK: no remaining 6.2 manifests"
 
       - name: Build simulator .app
         working-directory: ios
