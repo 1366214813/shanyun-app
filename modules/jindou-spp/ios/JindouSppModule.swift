@@ -12,11 +12,13 @@ public class JindouSppModule: Module {
       throw SppNotSupportedError()
     }
 
-    AsyncFunction("connect") { (_ address: String) -> [String: Any] throws in
+    AsyncFunction("connect") { (_ address: String) throws -> [String: Any] in
       throw SppNotSupportedError()
     }
 
-    AsyncFunction("disconnect") {}
+    AsyncFunction("disconnect") { () -> Bool in
+      return true
+    }
 
     AsyncFunction("isConnected") {
       false
@@ -30,8 +32,8 @@ public class JindouSppModule: Module {
       throw SppNotSupportedError()
     }
 
-    AsyncFunction("getSelectedAdapterAddress") {
-      nil
+    AsyncFunction("getSelectedAdapterAddress") { () -> String? in
+      return nil
     }
   }
 }
