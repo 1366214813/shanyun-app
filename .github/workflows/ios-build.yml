@@ -24,6 +24,7 @@ jobs:
         with:
           lfs: true
           submodules: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -37,43 +38,34 @@ jobs:
       - name: Prebuild iOS project
         run: npx expo prebuild --platform ios --no-install
 
-      - name: Install CocoaPods
-        run: |
-          sudo gem install cocoapods --no-document | tail -2 || true
-          pod --version
-
       - name: Pod install
-        run: pod install --project-directory=ios 2>&1 | tail -20
-
-      - name: Resolve scheme name
-        id: scheme
+        working-directory: ios
         run: |
-          cd ios
-          WORKSPACE=$(ls *.xcworkspace | head -1)
-          echo "workspace=$WORKSPACE"
-          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null | awk '/Schemes:/{f=1;next} f&&NF{gsub(/^ +| +$/,""); print; exit}')
-          echo "scheme=$SCHEME"
-          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
-          echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
+          pod install
+          ls -la *.xcworkspace
 
       - name: Build simulator .app
+        working-directory: ios
         run: |
-          set -o pipefail
-          cd ios
+          MERGED=$(find . -maxdepth 2 -name '*.xcworkspace' | head -1)
+          echo "workspace=$MERGED"
           xcodebuild \
-            -workspace "${{ steps.scheme.outputs.workspace }}" \
-            -scheme "${{ steps.scheme.outputs.scheme }}" \
+            -workspace "$MERGED" \
+            -scheme app \
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            build 2>&1 | tee ios-build.log | xcpretty --color || true
+            build 2>&1 | tee ios-build.log
+        shell: bash
 
       - name: Locate .app bundle
         id: app
+        working-directory: ios
         run: |
-          APP=$(find ios/build/Build/Products/Debug-iphonesimulator -name '*.app' -maxdepth 2 | head -1)
+          ls -la build/Build/Products/Debug-iphonesimulator/ || exit 1
+          APP=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 2 -name '*.app' | head -1)
           echo "APP=$APP" >> "$GITHUB_OUTPUT"
           ls -lh "$APP"
 
