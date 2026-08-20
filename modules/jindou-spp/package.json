@@ -1,0 +1,8 @@
+{
+  "name": "jindou-spp",
+  "version": "1.0.0",
+  "description": "Classic Bluetooth SPP module for the HM-T260LR printer",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT"
+}

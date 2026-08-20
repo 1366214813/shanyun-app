@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "package": "com.jindou.spp",
+    "modules": ["com.jindou.spp.JindouSppModule"]
+  }
+}
