@@ -42,15 +42,14 @@ jobs:
         working-directory: ios
         run: |
           pod install
+          ls -la
           ls -la *.xcworkspace
 
       - name: Build simulator .app
         working-directory: ios
         run: |
-          MERGED=$(find . -maxdepth 2 -name '*.xcworkspace' | head -1)
-          echo "workspace=$MERGED"
           xcodebuild \
-            -workspace "$MERGED" \
+            -workspace app.xcworkspace \
             -scheme app \
             -configuration Debug \
             -sdk iphonesimulator \
