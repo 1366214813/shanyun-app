@@ -41,7 +41,8 @@ jobs:
       - name: Lower Swift tools version for Xcode 16.4 compat
         run: |
           sed -i '' 's/swift-tools-version: 6\.2/swift-tools-version: 6.1/' node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift
-          grep -n "swift-tools-version" node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift
+          sed -i '' 's/swift-tools-version: 6\.2/swift-tools-version: 6.1/' node_modules/expo-modules-jsi/apple/Package.swift
+          grep -rn "swift-tools-version" node_modules/@expo/expo-modules-macros-plugin/apple/Package.swift node_modules/expo-modules-jsi/apple/Package.swift
 
       - name: Pod install
         working-directory: ios
