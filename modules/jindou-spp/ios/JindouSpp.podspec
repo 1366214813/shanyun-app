@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
   s.homepage      = 'https://github.com/1366214813/shanyun-app'
   s.license       = package['license']
   s.author        = { 'shanyun' => 'shanyun@local' }
-  s.platforms     = { :ios => '16.4' }
+  s.platforms     = { :ios => '15.1' }
   s.swift_version = '5.9'
   s.source        = { path: '.' }
   s.source_files  = "**/*.{h,m,swift}"

@@ -76,9 +76,48 @@ jobs:
           echo "APP=$APP" >> "$GITHUB_OUTPUT"
           ls -lh "$APP"
 
-      - name: Upload .app artifact
+      - name: Upload simulator .app
         uses: actions/upload-artifact@v4
         with:
           name: jindou-ios-simulator.app
           path: ios/build/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: error
+
+      - name: Build device .app (unsigned, for TrollStore)
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -workspace app.xcworkspace \
+            -scheme app \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build_device \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ios-device-build.log
+        shell: bash
+
+      - name: Package .ipa
+        working-directory: ios
+        run: |
+          ls -la build_device/Build/Products/Release-iphoneos/ || exit 1
+          APP=$(find build_device/Build/Products/Release-iphoneos -maxdepth 2 -name '*.app' | head -1)
+          echo "APP=$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          # strip extended attributes & code-sign artifacts
+          cd Payload && xattr -cr "$(basename "$APP")" 2>/dev/null || true
+          cd ..
+          zip -qry jindou-ios.ipa Payload
+          ls -lh jindou-ios.ipa
+          cd ..
+          mv ios/jindou-ios.ipa .
+          echo "IPA=$PWD/jindou-ios.ipa"
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jindou-ios-trollstore.ipa
+          path: jindou-ios.ipa
           if-no-files-found: error
