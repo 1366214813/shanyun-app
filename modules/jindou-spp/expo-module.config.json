@@ -1,7 +1,10 @@
 {
-  "platforms": ["android"],
+  "platforms": ["android", "ios"],
   "android": {
     "package": "com.jindou.spp",
     "modules": ["com.jindou.spp.JindouSppModule"]
+  },
+  "ios": {
+    "podspecPath": "ios/JindouSpp.podspec"
   }
 }

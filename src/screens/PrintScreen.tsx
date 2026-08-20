@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useAppStore, THEMES } from '../store/useAppStore';
 import {
-  scanSppDevices, connectToDeviceSpp, printLabel, disconnect, isConnected, getConnectedName,
+  scanSppDevices, connectToDeviceSpp, scanDevices, connectToDevice, printLabel, disconnect, isConnected, getConnectedName,
   queryBattery, getLastBatteryInfo, setOnConnectionChange, checkConnection,
   LABEL_PRESETS,
   type ScannedDevice, type LabelConfig, type LabelData, type BatteryInfo,
@@ -163,10 +163,12 @@ export default function PrintScreen({ navigation }: any) {
     setScanError(null);
     setDeviceListVisible(true);
     try {
-      const list = await scanSppDevices();
+      const list = Platform.OS === 'ios' ? await scanDevices() : await scanSppDevices();
       setDevices(list);
       if (list.length === 0) {
-        setScanError('未发现已配对设备，请先在系统蓝牙与打印机配对后重试');
+        setScanError(Platform.OS === 'ios'
+          ? '未发现打印机，请开机并靠近后重试'
+          : '未发现已配对设备，请先在系统蓝牙与打印机配对后重试');
       }
     } catch (err) {
       setScanError(err instanceof Error ? err.message : '扫描失败，请检查蓝牙权限');
@@ -177,7 +179,9 @@ export default function PrintScreen({ navigation }: any) {
 
   const handleSelectDevice = async (device: ScannedDevice) => {
     setConnectingId(device.id);
-    const ok = await connectToDeviceSpp(device.id, device.name);
+    const ok = Platform.OS === 'ios'
+      ? await connectToDevice(device)
+      : await connectToDeviceSpp(device.id, device.name);
     setConnectingId(null);
     if (ok) {
       setDeviceListVisible(false);

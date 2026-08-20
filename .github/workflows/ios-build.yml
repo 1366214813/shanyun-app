@@ -1,0 +1,85 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  ios:
+    name: Build iOS (simulator, unsigned)
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          submodules: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prebuild iOS project
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods --no-document | tail -2 || true
+          pod --version
+
+      - name: Pod install
+        run: pod install --project-directory=ios 2>&1 | tail -20
+
+      - name: Resolve scheme name
+        id: scheme
+        run: |
+          cd ios
+          WORKSPACE=$(ls *.xcworkspace | head -1)
+          echo "workspace=$WORKSPACE"
+          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null | awk '/Schemes:/{f=1;next} f&&NF{gsub(/^ +| +$/,""); print; exit}')
+          echo "scheme=$SCHEME"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "workspace=$WORKSPACE" >> "$GITHUB_OUTPUT"
+
+      - name: Build simulator .app
+        run: |
+          set -o pipefail
+          cd ios
+          xcodebuild \
+            -workspace "${{ steps.scheme.outputs.workspace }}" \
+            -scheme "${{ steps.scheme.outputs.scheme }}" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ios-build.log | xcpretty --color || true
+
+      - name: Locate .app bundle
+        id: app
+        run: |
+          APP=$(find ios/build/Build/Products/Debug-iphonesimulator -name '*.app' -maxdepth 2 | head -1)
+          echo "APP=$APP" >> "$GITHUB_OUTPUT"
+          ls -lh "$APP"
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jindou-ios-simulator.app
+          path: ios/build/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: error

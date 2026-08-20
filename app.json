@@ -10,7 +10,15 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jindou.warehouse",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "需要使用蓝牙连接打印机打印吊牌",
+        "NSBluetoothPeripheralUsageDescription": "需要蓝牙权限以连接打印机",
+        "NSPhotoLibraryUsageDescription": "需要相册权限以选择商品图片",
+        "NSCameraUsageDescription": "需要相机权限以拍摄商品图片",
+        "UIBackgroundModes": ["bluetooth-central"]
+      }
     },
     "android": {
       "adaptiveIcon": {
