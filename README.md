@@ -1,4 +1,4 @@
-# 金豆库管 v1.1.0
+# 金豆库管 v1.3.0
 
 服装店库存管理工具，支持 OCR 拍照识别小票/标签批量入库，蓝牙连接汉印T260打印吊牌。
 
@@ -90,127 +90,40 @@ shanyun-app/
 
 ### 环境要求
 
-- Node.js 18+
-- 构建服务器（x86_64 Linux，Java 17，Android SDK/NDK）
-- Android SDK（NDK 27.1.12297006，CMake 3.22.1，Gradle 9.3.1）
-- 当前构建服务器：`ssh Yw@100.66.1.3`，项目 `/home/Yw/shanyun-app`（当前不可达，改用 GitHub Actions CI）
-- JDK17 位于 `~/android-sdk/jdk-17.0.13+11`，SDK 位于 `~/android-sdk`
+- Node.js 22+
+- GitHub Actions CI（自动构建 Android arm64 APK + iOS IPA）
 
-### 构建流程（当前版本）
+### CI 构建流程（GitHub Actions）
 
-```bash
-# 1. 本地修改后同步单个文件到服务器（scp），或全量 tar 同步
-scp path/to/file Yw@100.66.1.3:/home/Yw/shanyun-app/path/to/file
+推送 `main` 分支时自动并行构建 Android 和 iOS：
 
-# 2. 服务器构建 APK（仅 arm64）
-cd /home/Yw/shanyun-app
-export JAVA_HOME=~/android-sdk/jdk-17.0.13+11
-export ANDROID_HOME=~/android-sdk
-./android/gradlew -p android assembleRelease -PreactNativeArchitectures=arm64-v8a -x lint -x test
-# 长任务可后台执行：nohup ... > /tmp/build.log 2>&1 &
-# 备份/下载 APK：scp Yw@100.66.1.3:.../app-release.apk ./  (110MB，注意 scp 超时截断，下载后用 unzip -t 校验)
+**Android**（`.github/workflows/android-build.yml`，`ubuntu-latest`）：
+1. `npx expo prebuild --platform android --no-install`
+2. `./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a`
+3. 产物：`jindou-android-arm64.apk`
 
-# 3. 输出
-# /home/Yw/shanyun-app/android/app/build/outputs/apk/release/app-release.apk
-# 通过 adb 安装到手机（手机需先配对打印机并允许 adb 无线调试）
-# 无线 adb：adb tcpip 5555 && adb connect <手机IP>:5555
-# 或用 adb push 推送到 /sdcard/Download/ 后手动安装
-```
+**iOS**（`.github/workflows/ios-build.yml`，`macos-15`）：
+1. `npx expo prebuild --platform ios --no-install`
+2. 降级 `IPHONEOS_DEPLOYMENT_TARGET = 15.1`
+3. 切换 Xcode 26 + `pod install`
+4. `xcodebuild -sdk iphoneos -configuration Release` → unsigned `.app`
+5. 打包 `.ipa` → 产物：`jindou-ios-trollstore.ipa`
+
+### TrollStore 安装（iOS 15.4.1 + iPhone 12 Pro）
+
+1. GitHub Actions → 最新 successful run → Artifacts → 下载 `jindou-ios-trollstore.ipa`
+2. 传到 iPhone（AirDrop / 文件分享）
+3. TrollStore → 安装 ipa
+4. app 名称：`金豆库管`（bundle: `com.jindou.warehouse`）
 
 ### 构建注意事项（jindou-spp 模块）
 
 - `modules/jindou-spp/index.js` 是**纯 JS**（无 TS 注解），否则 Metro 报 `SyntaxError: Missing semicolon`
 - `android/build.gradle` 必须含 `versionCode`/`versionName`，JVM target 需一致（17）
 - `expo-module.config.json` 的 modules 用**全限定类名** `com.jindou.spp.JindouSppModule`（生成器拼 `ExpoModulesPackageList.kt`，裸类名会 `Unresolved reference`）
-- `Exceptions.UnknownException` 在 expo-modules-core 55 不存在，改用 `Exceptions.IllegalStateException`
-- **必须在 `android/settings.gradle` 配置 `expoAutolinking.searchPaths = ["./modules"]`**（在 `useExpoModules()` 之前）。否则 gradle 的 autolinking 不会发现 `modules/` 下的本地模块，运行时报 `jindou-spp native module not available`（原生模块未注册）。
-- **JS 侧必须用 `requireNativeModule('JindouSpp')` 获取模块**（RN 0.83 New Architecture + Expo 55 下 `NativeModulesProxy.JindouSpp` 可能为 undefined）。代码片段：
-  ```js
-  import { requireNativeModule, NativeModulesProxy } from 'expo-modules-core';
-  let native;
-  try { native = requireNativeModule('JindouSpp'); } catch { native = NativeModulesProxy.JindouSpp; }
-  ```
-- **项目根目录必须有 `index.ts`**（`import { registerRootComponent } from 'expo'; registerRootComponent(App)`）。同步文件时注意别误覆盖它（`main` 字段指向 `index.ts`，缺失会导致 `Cannot resolve entry file` 构建失败）
-- 构建失败排查：`strip` 异常 / Metro 失败时加 `REACT_NATIVE_MAX_WORKERS=1`
-- **构建增量验证技巧**：若怀疑模块没打包进 APK，用 `dexdump` 检查 `ExpoModulesPackageList` 类里是否含 `const-class Lcom/jindou/spp/JindouSppModule`（模块真正注册的凭证）
-
-### 老版本构建（BLE-only，供参考）
-
-```bash
-# 1. 同步源码到构建服务器
-tar czf shanyun-sync.tar.gz \
-  --exclude=node_modules --exclude=.expo --exclude=android \
-  --exclude=web-build --exclude=patches .
-scp shanyun-sync.tar.gz Yw@100.66.1.3:/home/Yw/
-
-# 2. 解压并安装依赖
-ssh Yw@100.66.1.3
-cd /home/Yw
-rm -rf shanyun-app && tar xzf shanyun-sync.tar.gz
-cd shanyun-app
-rm -rf node_modules android
-npm install --legacy-peer-deps
-
-# 3. 排除 ble-plx codegen（避免 cmake 编译错误）
-cd node_modules/react-native-ble-plx
-python3 -c "
-import json
-with open('package.json') as f:
-    d = json.load(f)
-d.pop('codegenConfig', None)
-with open('package.json', 'w') as f:
-    json.dump(d, f, indent=2)
-"
-cd ../..
-
-# 4. Expo prebuild（不加 EXPO_USE_COMMUNITY_AUTOLINKING）
-npx expo prebuild --platform android --clean
-
-# 5. 应用 Patch（RN 版本兼容性）
-sed -i 's/VersionNumber.parse(REACT_NATIVE_VERSION) < VersionNumber.parse("0.71")/REACT_NATIVE_MINOR_VERSION < 71/g' \
-  node_modules/onnxruntime-react-native/android/build.gradle
-
-# 6. 修复 hermesc 权限
-chmod +x node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
-
-# 7. 构建 APK
-cd android
-echo 'sdk.dir=/home/Yw/android-sdk' > local.properties
-ANDROID_HOME=/home/Yw/android-sdk ./gradlew assembleRelease \
-  -PreactNativeArchitectures=arm64-v8a \
-  -PnewArchEnabled=false \
-  --no-daemon \
-  -Dorg.gradle.jvmargs=-Xmx1024m \
-  -Dorg.gradle.workers.max=2
-
-# 8. 输出
-cp app/build/outputs/apk/release/app-release.apk /vol1/1000/shanyun-build/shanyun.apk
-```
-
-### 老版本关键构建注意事项
-
-- **不要** 加 `EXPO_USE_COMMUNITY_AUTOLINKING=1`，会导致 ble-plx codegen cmake 错误
-- `react-native-ble-plx` 必须移除 `package.json` 中的 `codegenConfig`，否则 gradle autolinking 会生成不存在的 cmake 路径
-- `onnxruntime-react-native` 需要 patch：`REACT_NATIVE_VERSION` 改为 `REACT_NATIVE_MINOR_VERSION`
-- 仅编译 `arm64-v8a` 架构，节省编译时间
-- Gradle 内存限制 1024MB，worker 数量 2，防止服务器 OOM
-
-### iOS 构建（GitHub Actions CI + TrollStore）
-
-iOS 构建通过 GitHub Actions CI 自动完成，无需本地 Mac/Xcode。
-
-**CI 流程**（`.github/workflows/ios-build.yml`）：
-1. `npx expo prebuild --platform ios --clean`（CNG，不提交 ios/ 目录）
-2. `pod install`（CocoaPods 依赖）
-3. 模拟器构建：`-sdk iphonesimulator -configuration Debug` → artifact `jindou-ios-simulator.app`
-4. 真机构建：`-sdk iphoneos -configuration Release`（签名 `CODE_SIGNING_ALLOWED=NO`）→ unsigned `.app`
-5. 打包 `.ipa`（`Payload/` 目录 + `zip -r`）→ artifact `jindou-ios-trollstore.ipa`
-
-**TrollStore 安装**（iOS 15.4.1 + iPhone 12 Pro）：
-1. GitHub Actions 页面 → 最新 successful run → Artifacts → 下载 `jindou-ios-trollstore.ipa`（约 40MB）
-2. 传到 iPhone（AirDrop / 文件分享）
-3. TrollStore → 安装 ipa
-4. app 名称：`金豆库管`（bundle: `com.jindou.warehouse`）
+- **必须在 `android/settings.gradle` 配置 `expoAutolinking.searchPaths = ["./modules"]`**（在 `useExpoModules()` 之前）
+- **JS 侧必须用 `requireNativeModule('JindouSpp')` 获取模块**（RN 0.83 New Architecture + Expo 55）
+- **项目根目录必须有 `index.ts`**（`import { registerRootComponent } from 'expo'; registerRootComponent(App)`）
 
 **iOS 蓝牙说明**：
 - iOS **不支持经典蓝牙 SPP**（RFCOMM 被 Apple 封闭），打印机连接走 **BLE 通道**（react-native-ble-plx）
@@ -332,10 +245,21 @@ iOS 构建通过 GitHub Actions CI 自动完成，无需本地 Mac/Xcode。
 
 ## 源码备份
 
-- 构建与备份服务器：`/home/Yw/shanyun-app`（100.66.1.3，曾为 192.168.1.9，当前不可达）
-- APK 输出：`/home/Yw/shanyun-app/android/app/build/outputs/apk/release/app-release.apk`
-- 本地草稿（Termux）：`/data/data/com.termux/files/home/shanyun-app`
-- 手机固件备份：`/storage/emulated/0/TRIM/Download/飞牛下载/`
+- GitHub：`git@github.com:1366214813/shanyun-app.git`（24+ tags，完整版本历史）
+- 本地（Termux）：`/data/data/com.termux/files/home/shanyun-app`
+- 本地备份包：`/data/data/com.termux/files/home/shanyun-app-backup-YYYYMMDD.tar.gz`
+
+### 版本标签
+
+| Tag | 说明 |
+|-----|------|
+| v1.3.0 | 代码审查修复 + CI 合并 |
+| v1.2.1 | 40x30 预设模板 + 55 条文案 + 数量选择器 |
+| v1.1.1 | BLE 打印加速（400B 分块 + 自动重连） |
+| v1.1.0 | BLE writeWithResponse + ESC/POS 修复 |
+| v1.0.0 | SDK 55 降级（支持 iOS 15.1+） |
+| v0.5.0 | 首个 TrollStore IPA |
+| v0.1.0 | 初始导入 |
 
 ## License
 
