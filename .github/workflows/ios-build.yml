@@ -38,6 +38,12 @@ jobs:
       - name: Prebuild iOS project
         run: npx expo prebuild --platform ios --no-install
 
+      - name: Lower iOS deployment target to 15.1
+        run: |
+          grep -n "IPHONEOS_DEPLOYMENT_TARGET" ios/app.xcodeproj/project.pbxproj | head -5
+          find ios -name 'project.pbxproj' -exec sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 16\.4;/IPHONEOS_DEPLOYMENT_TARGET = 15.1;/g' {} +
+          grep -n "IPHONEOS_DEPLOYMENT_TARGET" ios/app.xcodeproj/project.pbxproj | head -5
+
       - name: Switch to Xcode 26 (Swift 6.2 required by expo SPM)
         run: |
           ls /Applications | grep -i xcode

@@ -12,6 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jindou.warehouse",
+      "deploymentTarget": "15.1",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "需要使用蓝牙连接打印机打印吊牌",
         "NSBluetoothPeripheralUsageDescription": "需要蓝牙权限以连接打印机",
