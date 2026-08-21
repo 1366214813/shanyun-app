@@ -83,7 +83,7 @@ let lastDevice: ScannedDevice | null = null;
 
 // BLE 写入块大小（配合 BLE MTU，避免写入失败）
 const WRITE_CHUNK_SIZE = 200;
-const WRITE_DELAY_MS = 20;
+const WRITE_DELAY_MS = 50; // iOS writeWithResponse 需要更长间隔
 
 export function setOnConnectionChange(cb: ((connected: boolean) => void) | null) {
   onConnectionChange = cb;
@@ -395,7 +395,11 @@ export async function queryBattery(): Promise<BatteryInfo | null> {
     // CPCL 命令: ! U 1 查询打印机状态
     const cmd = new TextEncoder().encode('! U 1\r\n');
     const base64 = btoa(String.fromCharCode(...cmd));
-    await writeChar.writeWithoutResponse(base64);
+    if (writeChar.isWritableWithResponse) {
+      await writeChar.writeWithResponse(base64);
+    } else {
+      await writeChar.writeWithoutResponse(base64);
+    }
 
     await new Promise(r => setTimeout(r, 300));
 
@@ -493,7 +497,11 @@ export async function sendSetPageType(type: number): Promise<boolean> {
   try {
     const cmd = new Uint8Array([27, 115, 101, 116, 112, type]);
     const base64 = btoa(String.fromCharCode(...cmd));
-    await writeChar.writeWithoutResponse(base64);
+    if (writeChar.isWritableWithResponse) {
+      await writeChar.writeWithResponse(base64);
+    } else {
+      await writeChar.writeWithoutResponse(base64);
+    }
     logInfo('PRINTER', `已发送 setPrintPageType type=${type}`);
     return true;
   } catch (err) {
@@ -559,24 +567,22 @@ export async function printLabel(data: LabelData, config?: LabelConfig): Promise
   if (!writeChar) { logError('PRINTER', '未连接打印机'); return false; }
 
   try {
-    logInfo('PRINTER', '打印前设置标签纸类型...');
-    await sendSetPageType(1); // 标签纸
-
     const bitmap = await renderLabelBitmap(data, cfg);
     if (!bitmap) {
       logError('PRINTER', '标签渲染失败 (skia surface 创建失败)');
       return false;
     }
 
-    const cmd = buildCPCLLabel(bitmap, 1, 55);
-    logInfo('PRINTER', `发送 CPCL 指令 (${cmd.length} bytes, 位图 ${bitmap.widthPx}x${bitmap.heightPx})...`);
+    // BLE 通道也用 ESC/POS 格式（和 SPP 一致），CPCL 在 T260 上不出纸
+    const cmd = buildESCPOLILabel(bitmap);
+    logInfo('PRINTER', `BLE 发送 ESC/POS 指令 (${cmd.length} bytes, 位图 ${bitmap.widthPx}x${bitmap.heightPx})...`);
 
     await writeChunks(cmd);
 
-    logInfo('PRINTER', '打印完成');
+    logInfo('PRINTER', 'BLE 打印完成');
     return true;
   } catch (err) {
-    logError('PRINTER', `打印失败: ${err instanceof Error ? err.message : String(err)}`);
+    logError('PRINTER', `BLE 打印失败: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -588,7 +594,11 @@ async function writeChunks(data: Uint8Array): Promise<void> {
   const chunkSize = Math.min(writeMtu, WRITE_CHUNK_SIZE);
   for (let i = 0; i < data.length; i += chunkSize) {
     const chunk = data.slice(i, i + chunkSize);
-    await writeChar!.writeWithoutResponse(uint8ArrayToBase64(chunk));
+    if (writeChar!.isWritableWithResponse) {
+      await writeChar!.writeWithResponse(uint8ArrayToBase64(chunk));
+    } else {
+      await writeChar!.writeWithoutResponse(uint8ArrayToBase64(chunk));
+    }
     if (WRITE_DELAY_MS > 0) {
       await new Promise(r => setTimeout(r, WRITE_DELAY_MS));
     }
