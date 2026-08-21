@@ -92,6 +92,7 @@ export default function PrintScreen({ navigation }: any) {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [config, setConfig] = useState<LabelConfig>(labelConfig);
+  const [quantities, setQuantities] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     setConnected(isConnected());
@@ -211,11 +212,17 @@ export default function PrintScreen({ navigation }: any) {
 
   const handlePrint = async (product: Product) => {
     if (!connected) { Alert.alert('提示', '请先连接打印机'); return; }
+    const qty = quantities.get(product.id) || 1;
     setPrinting(product.id);
-    const ok = await printLabel(buildData(product), config);
+    let success = 0;
+    for (let i = 0; i < qty; i++) {
+      const ok = await printLabel(buildData(product), config);
+      if (ok) success++;
+      if (i < qty - 1) await new Promise(r => setTimeout(r, 200));
+    }
     setPrinting(null);
-    if (ok) Alert.alert('成功', `已打印: ${product.name}`);
-    else Alert.alert('失败', '打印失败，请检查打印机');
+    if (success === qty) Alert.alert('成功', `已打印 ${qty} 张: ${product.name}`);
+    else Alert.alert('完成', `打印 ${success}/${qty} 张: ${product.name}`);
   };
 
   const handleBatchPrint = async () => {
@@ -225,13 +232,19 @@ export default function PrintScreen({ navigation }: any) {
 
     setPrinting('batch');
     let success = 0;
+    let total = 0;
     for (const p of selected) {
-      const ok = await printLabel(buildData(p), config);
-      if (ok) success++;
+      const qty = quantities.get(p.id) || 1;
+      total += qty;
+      for (let i = 0; i < qty; i++) {
+        const ok = await printLabel(buildData(p), config);
+        if (ok) success++;
+        if (i < qty - 1) await new Promise(r => setTimeout(r, 200));
+      }
       await new Promise(r => setTimeout(r, 200));
     }
     setPrinting(null);
-    Alert.alert('完成', `成功打印 ${success}/${selected.length} 张吊牌`);
+    Alert.alert('完成', `成功打印 ${success}/${total} 张吊牌`);
     setSelectedProducts(new Set());
   };
 
@@ -243,6 +256,7 @@ export default function PrintScreen({ navigation }: any) {
   const renderItem = ({ item }: { item: Product }) => {
     const isSelected = selectedProducts.has(item.id);
     const isPrinting = printing === item.id;
+    const qty = quantities.get(item.id) || 1;
     return (
       <TouchableOpacity
         style={[styles.productItem, isSelected && styles.productSelected]}
@@ -253,6 +267,29 @@ export default function PrintScreen({ navigation }: any) {
           <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
           <Text style={styles.productMeta}>{item.code} | {item.category}</Text>
           <Text style={styles.productPrice}>¥{item.retailPrice}</Text>
+        </View>
+        <View style={styles.qtyRow}>
+          <TouchableOpacity
+            style={styles.qtyBtn}
+            onPress={() => setQuantities(prev => {
+              const next = new Map(prev);
+              next.set(item.id, Math.max(1, (next.get(item.id) || 1) - 1));
+              return next;
+            })}
+          >
+            <Text style={styles.qtyBtnText}>-</Text>
+          </TouchableOpacity>
+          <Text style={styles.qtyText}>{qty}</Text>
+          <TouchableOpacity
+            style={styles.qtyBtn}
+            onPress={() => setQuantities(prev => {
+              const next = new Map(prev);
+              next.set(item.id, (next.get(item.id) || 1) + 1);
+              return next;
+            })}
+          >
+            <Text style={styles.qtyBtnText}>+</Text>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={[styles.printBtn, isPrinting && styles.printingBtn]}
@@ -314,15 +351,18 @@ export default function PrintScreen({ navigation }: any) {
         </View>
       </View>
 
-      {selectedProducts.size > 0 && (
-        <TouchableOpacity style={styles.batchBtn} onPress={handleBatchPrint} disabled={printing === 'batch'}>
-          {printing === 'batch' ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.batchBtnText}>批量打印 ({selectedProducts.size})</Text>
-          )}
-        </TouchableOpacity>
-      )}
+      {selectedProducts.size > 0 && (() => {
+        const totalQty = Array.from(selectedProducts).reduce((sum, id) => sum + (quantities.get(id) || 1), 0);
+        return (
+          <TouchableOpacity style={styles.batchBtn} onPress={handleBatchPrint} disabled={printing === 'batch'}>
+            {printing === 'batch' ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.batchBtnText}>批量打印 ({selectedProducts.size} 种, {totalQty} 张)</Text>
+            )}
+          </TouchableOpacity>
+        );
+      })()}
 
       <FlatList
         data={products}
@@ -447,6 +487,10 @@ const styles = StyleSheet.create({
   productName: { fontSize: 15, fontWeight: '600', color: '#333', marginBottom: 4 },
   productMeta: { fontSize: 12, color: '#999' },
   productPrice: { fontSize: 14, color: '#E17055', fontWeight: '600', marginTop: 4 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
+  qtyBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
+  qtyBtnText: { fontSize: 16, fontWeight: '600', color: '#333' },
+  qtyText: { fontSize: 14, fontWeight: '600', color: '#333', marginHorizontal: 6, minWidth: 20, textAlign: 'center' },
   printBtn: { backgroundColor: '#6C5CE7', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, minWidth: 60, alignItems: 'center' },
   printingBtn: { backgroundColor: '#999' },
   printBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
