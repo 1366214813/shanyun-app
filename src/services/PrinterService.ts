@@ -82,8 +82,8 @@ const LAST_DEVICE_KEY = 'jindou_last_printer';
 let lastDevice: ScannedDevice | null = null;
 
 // BLE 写入块大小（配合 BLE MTU，避免写入失败）
-const WRITE_CHUNK_SIZE = 200;
-const WRITE_DELAY_MS = 50; // iOS writeWithResponse 需要更长间隔
+const WRITE_CHUNK_SIZE = 400; // MTU 协商后通常 514B，400B 安全
+const WRITE_DELAY_MS = 10; // writeWithResponse 已有确认，减少额外延时
 
 export function setOnConnectionChange(cb: ((connected: boolean) => void) | null) {
   onConnectionChange = cb;
@@ -564,7 +564,14 @@ export async function printLabel(data: LabelData, config?: LabelConfig): Promise
     }
   }
 
-  if (!writeChar) { logError('PRINTER', '未连接打印机'); return false; }
+  if (!writeChar) {
+    // 尝试自动重连（打印完 BLE 可能超时断开）
+    if (lastDevice) {
+      logInfo('PRINTER', 'BLE 未连接，尝试自动重连...');
+      try { await connectToDevice(lastDevice); } catch (_) {}
+    }
+    if (!writeChar) { logError('PRINTER', '未连接打印机'); return false; }
+  }
 
   try {
     const bitmap = await renderLabelBitmap(data, cfg);
