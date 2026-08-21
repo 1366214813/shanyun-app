@@ -11,10 +11,17 @@ const SCREEN_W = Dimensions.get('window').width;
 const THUMB_SIZE = 52;
 
 function getDocDir(): Directory { return new Directory(Paths.document, 'product_images'); }
-async function ensureDocDir(): Promise<Directory> { const dir = getDocDir(); if (!dir.exists) dir.create(); return dir; }
+async function ensureDocDir(): Promise<Directory> {
+  const dir = getDocDir();
+  if (!dir.exists) dir.create({ idempotent: true });
+  return dir;
+}
 async function saveImagePermanent(uri: string, productId: string): Promise<string> {
-  const dir = await ensureDocDir(); const ext = uri.split('.').pop() || 'jpg';
-  const dest = new File(dir, `${productId}.${ext}`); await new File(uri).copy(dest); return dest.uri;
+  const dir = await ensureDocDir();
+  const ext = uri.split('.').pop() || 'jpg';
+  const dest = new File(dir, `${productId}.${ext}`);
+  new File(uri).copy(dest);
+  return dest.uri;
 }
 
 export default function ProductsScreen() {
@@ -70,7 +77,10 @@ export default function ProductsScreen() {
     if (!formName.trim()) { Alert.alert('提示', '请输入商品名称'); return; }
     const id = editing ? editing.id : genId('p');
 let savedUri = formImageUri;
-  if (formImageUri && formImageUri !== editing?.imageUri) { try { savedUri = await saveImagePermanent(formImageUri, id); } catch { savedUri = formImageUri; } }
+  if (formImageUri && formImageUri !== editing?.imageUri) {
+    try { savedUri = await saveImagePermanent(formImageUri, id); }
+    catch { Alert.alert('提示', '图片保存失败，使用原始路径'); savedUri = formImageUri; }
+  }
     const code = formCode.trim() || genBarcode();
     const data = { name: formName.trim(), code, category: formCategory, retailPrice: Number(formRetailPrice) || 0, purchasePrice: Number(formPurchasePrice) || 0, stock: Number(formStock) || 0, warningStock: Number(formWarningStock) || 10, imageUri: savedUri || '' };
     if (editing) updateProduct(editing.id, data); else addProduct({ id, storeId: currentStoreId, ...data, isHot: false, unit: '件', createdAt: new Date().toISOString() });
@@ -82,6 +92,7 @@ let savedUri = formImageUri;
   const [printingId, setPrintingId] = useState<string | null>(null);
   const handlePrintItem = async (item: Product) => {
     if (!isConnected()) { Alert.alert('未连接打印机', '请先到「打印」页连接打印机后再打印'); return; }
+    if (!labelConfig) { Alert.alert('提示', '请先在设置页配置标签模板后再打印'); return; }
     setPrintingId(item.id);
     const ok = await printLabel({
       name: item.name, code: item.code, category: item.category,
@@ -166,7 +177,7 @@ let savedUri = formImageUri;
       </TouchableOpacity>
 
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity activeOpacity={1} style={[styles.modalContent, { backgroundColor: tc.card }]} onPress={() => {}}>
             <ScrollView keyboardShouldPersistTaps="handled">
               <View style={styles.modalHeader}>

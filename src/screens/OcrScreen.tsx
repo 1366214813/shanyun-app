@@ -24,15 +24,28 @@ type ParsedItem = {
 };
 
 function parseReceiptItems(text: string, ocrItems?: RecognitionResult[]): ParsedItem[] {
+  let items: ParsedItem[] = [];
+
   if (ocrItems && ocrItems.length >= 2) {
     const coordItems = parseByCoordinates(ocrItems);
-    if (coordItems.length > 0) return coordItems;
+    if (coordItems.length > 0) items = coordItems;
   }
-  const lineItems = parseByLines(text);
-  if (lineItems.length > 1) return lineItems;
-  const continuousItems = parseContinuous(text);
-  if (continuousItems.length > 0) return continuousItems;
-  return lineItems;
+
+  if (!items.length) {
+    items = parseByLines(text);
+  }
+
+  if (!items.length) {
+    items = parseContinuous(text);
+  }
+
+  const uniq = new Map<string, ParsedItem>();
+  items.forEach(it => {
+    const key = it.code || `${it.name}|${it.purchasePrice}`;
+    if (!uniq.has(key)) uniq.set(key, it);
+  });
+
+  return Array.from(uniq.values());
 }
 
 const EXCLUDE_RE = /(合计|总计|实付|付款|退货|出货|未付|欠款|地址|电话|微信|温馨提示|累计|运费|确认|收报|打印|投诉|导购|小票编号|会员|本次|消费|抵扣|剩余|千万|退换|出示|所退|未弄|吊牌|货号|描述|品名|序号|分类|小计|单价|数量|总价|收款|找零|积分|剩念|斜音号|抖音号|收银小票|万千注意|最后期限|退换货|不影响|未弄脏|吊牌未|小抖章|购买时|未经穿着|未见水|开单时间|销售|回2|颜色|开单|备注|电话|手机|长按|删除此|清零|兑换|积分将|在此日期|完成积分|卡券|怦然心动|kids|连锁|收银小票)/;
@@ -43,7 +56,7 @@ function parseByCoordinates(ocrItems: RecognitionResult[]): ParsedItem[] {
   if (ocrItems.length === 0) return [];
   const sorted = [...ocrItems].sort((a, b) => a.box.y - b.box.y);
   const avgHeight = sorted.reduce((s, r) => s + r.box.height, 0) / sorted.length;
-  const threshold = avgHeight * 0.6;
+  const threshold = Math.max(avgHeight * 0.5, 10);
   const lines: RecognitionResult[][] = [];
   let curLine = [sorted[0]];
   for (let i = 1; i < sorted.length; i++) {

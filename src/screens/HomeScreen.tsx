@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useAppStore, THEMES } from '../store/useAppStore';
 import { formatMoney, formatDisplayDate, levelText, levelColor } from '../utils/format';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -11,17 +11,23 @@ export default function HomeScreen() {
   const { products, customers, orders, isLoading, loadData, getTodayStats, getWeekTrend, theme } = useAppStore();
   const tc = THEMES[theme];
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { if (isFocused) loadData(); }, [isFocused]);
 
   if (isLoading) {
-    return <View style={styles.loading}><Text>加载中...</Text></View>;
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={tc.primary} />
+        <Text style={{ marginTop: 8, color: tc.subText }}>加载中...</Text>
+      </View>
+    );
   }
 
   const stats = getTodayStats();
   const trend = getWeekTrend();
   const lowStock = products.filter((p) => p.stock <= p.warningStock);
-  const totalStock = products.reduce((s, p) => s + p.stock, 0);
+  const totalStock = products.reduce((s, p) => s + (p.stock ?? 0), 0);
   const recentOrders = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
   const topCustomers = [...customers].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 5);
 
@@ -92,7 +98,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {trend.some((t) => t.sales > 0) && (
+      {trend.length > 0 && trend.some((t) => t.sales > 0) ? (
         <View style={[styles.chartCard, { backgroundColor: tc.card }]}>
           <Text style={[styles.sectionTitle, { color: tc.text }]}>7日销售趋势</Text>
           <LineChart
@@ -111,6 +117,11 @@ export default function HomeScreen() {
             bezier
             style={styles.chart}
           />
+        </View>
+      ) : (
+        <View style={[styles.chartCard, { backgroundColor: tc.card }]}>
+          <Text style={[styles.sectionTitle, { color: tc.text }]}>7日销售趋势</Text>
+          <Text style={{ textAlign: 'center', color: tc.subText, marginTop: 40 }}>暂无统计数据</Text>
         </View>
       )}
 
