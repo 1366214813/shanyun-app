@@ -1,0 +1,148 @@
+name: Build Android + iOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  android:
+    name: Build Android arm64 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Prebuild Android
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build arm64 APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            -PenableHermes=true \
+            2>&1 | tee ../android-build.log
+        shell: bash
+
+      - name: Locate APK
+        id: apk
+        working-directory: android
+        run: |
+          find app/build/outputs -name '*.apk' -type f
+          APK=$(find app/build/outputs -name '*release*.apk' -type f | head -1)
+          if [ -z "$APK" ]; then
+            APK=$(find app/build/outputs -name '*.apk' -type f | head -1)
+          fi
+          echo "APK=$APK" >> "$GITHUB_OUTPUT"
+          ls -lh "$APK"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jindou-android-arm64.apk
+          path: android/${{ steps.apk.outputs.APK }}
+          if-no-files-found: error
+
+  ios:
+    name: Build iOS IPA
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Prebuild iOS
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Lower deployment target to 15.1
+        run: |
+          find ios -name 'project.pbxproj' -exec sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 16\.4;/IPHONEOS_DEPLOYMENT_TARGET = 15.1;/g' {} +
+
+      - name: Switch to Xcode 26
+        run: |
+          XCODE_DIR=$(ls -d /Applications/Xcode_2*.app 2>/dev/null | sort -V | tail -1)
+          echo "Using $XCODE_DIR"
+          sudo xcode-select -s "$XCODE_DIR"
+          xcodebuild -version
+
+      - name: Pod install
+        working-directory: ios
+        run: pod install
+
+      - name: Build device .app
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -workspace app.xcworkspace \
+            -scheme app \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build_device \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ios-device-build.log
+        shell: bash
+
+      - name: Package IPA
+        working-directory: ios
+        run: |
+          APP=$(find build_device/Build/Products/Release-iphoneos -maxdepth 2 -name '*.app' | head -1)
+          echo "APP=$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          cd Payload && xattr -cr "$(basename "$APP")" 2>/dev/null || true
+          cd ..
+          zip -qry jindou-ios.ipa Payload
+          ls -lh jindou-ios.ipa
+          cd ..
+          mv ios/jindou-ios.ipa .
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: jindou-ios-trollstore.ipa
+          path: jindou-ios.ipa
+          if-no-files-found: error
