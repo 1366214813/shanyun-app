@@ -20,8 +20,8 @@
 
 | 技术 | 版本 | 说明 |
 |------|------|------|
-| React Native | 0.85.3 | 跨平台框架 |
-| Expo | 56.x | 开发工具链 |
+| React Native | 0.83.10 | 跨平台框架 |
+| Expo | 55.x | 开发工具链 |
 | PaddleOCR | v4 (ch_PP-OCRv4) | 文字识别（ONNX Runtime） |
 | ONNX Runtime | 1.24.3 | AI 推理引擎 |
 | Zustand | 5.x | 状态管理 |
@@ -90,7 +90,7 @@ shanyun-app/
 - Node.js 18+
 - 构建服务器（x86_64 Linux，Java 17，Android SDK/NDK）
 - Android SDK（NDK 27.1.12297006，CMake 3.22.1，Gradle 9.3.1）
-- 当前构建服务器：`ssh Yw@100.66.1.3`，项目 `/home/Yw/shanyun-app`
+- 当前构建服务器：`ssh Yw@100.66.1.3`，项目 `/home/Yw/shanyun-app`（当前不可达，改用 GitHub Actions CI）
 - JDK17 位于 `~/android-sdk/jdk-17.0.13+11`，SDK 位于 `~/android-sdk`
 
 ### 构建流程（当前版本）
@@ -119,9 +119,9 @@ export ANDROID_HOME=~/android-sdk
 - `modules/jindou-spp/index.js` 是**纯 JS**（无 TS 注解），否则 Metro 报 `SyntaxError: Missing semicolon`
 - `android/build.gradle` 必须含 `versionCode`/`versionName`，JVM target 需一致（17）
 - `expo-module.config.json` 的 modules 用**全限定类名** `com.jindou.spp.JindouSppModule`（生成器拼 `ExpoModulesPackageList.kt`，裸类名会 `Unresolved reference`）
-- `Exceptions.UnknownException` 在 expo-modules-core 56 不存在，改用 `Exceptions.IllegalStateException`
+- `Exceptions.UnknownException` 在 expo-modules-core 55 不存在，改用 `Exceptions.IllegalStateException`
 - **必须在 `android/settings.gradle` 配置 `expoAutolinking.searchPaths = ["./modules"]`**（在 `useExpoModules()` 之前）。否则 gradle 的 autolinking 不会发现 `modules/` 下的本地模块，运行时报 `jindou-spp native module not available`（原生模块未注册）。
-- **JS 侧必须用 `requireNativeModule('JindouSpp')` 获取模块**（RN 0.85 New Architecture + Expo 56 下 `NativeModulesProxy.JindouSpp` 可能为 undefined）。代码片段：
+- **JS 侧必须用 `requireNativeModule('JindouSpp')` 获取模块**（RN 0.83 New Architecture + Expo 55 下 `NativeModulesProxy.JindouSpp` 可能为 undefined）。代码片段：
   ```js
   import { requireNativeModule, NativeModulesProxy } from 'expo-modules-core';
   let native;
@@ -192,14 +192,38 @@ cp app/build/outputs/apk/release/app-release.apk /vol1/1000/shanyun-build/shanyu
 - 仅编译 `arm64-v8a` 架构，节省编译时间
 - Gradle 内存限制 1024MB，worker 数量 2，防止服务器 OOM
 
+### iOS 构建（GitHub Actions CI + TrollStore）
+
+iOS 构建通过 GitHub Actions CI 自动完成，无需本地 Mac/Xcode。
+
+**CI 流程**（`.github/workflows/ios-build.yml`）：
+1. `npx expo prebuild --platform ios --clean`（CNG，不提交 ios/ 目录）
+2. `pod install`（CocoaPods 依赖）
+3. 模拟器构建：`-sdk iphonesimulator -configuration Debug` → artifact `jindou-ios-simulator.app`
+4. 真机构建：`-sdk iphoneos -configuration Release`（签名 `CODE_SIGNING_ALLOWED=NO`）→ unsigned `.app`
+5. 打包 `.ipa`（`Payload/` 目录 + `zip -r`）→ artifact `jindou-ios-trollstore.ipa`
+
+**TrollStore 安装**（iOS 15.4.1 + iPhone 12 Pro）：
+1. GitHub Actions 页面 → 最新 successful run → Artifacts → 下载 `jindou-ios-trollstore.ipa`（约 40MB）
+2. 传到 iPhone（AirDrop / 文件分享）
+3. TrollStore → 安装 ipa
+4. app 名称：`金豆库管`（bundle: `com.jindou.warehouse`）
+
+**iOS 蓝牙说明**：
+- iOS **不支持经典蓝牙 SPP**（RFCOMM 被 Apple 封闭），打印机连接走 **BLE 通道**（react-native-ble-plx）
+- `JindouSppModule.swift`：iOS 端为桩模块（`nativeSupport=false`），BLE 回退由 `PrintScreen.tsx` 处理
+- BLE 写特征 `0000ff02`，MTU 协商，ESC_POLI 位图协议
+
+**iOS 最低版本**：Expo SDK 55 要求 iOS ≥ 15.1，`IPHONEOS_DEPLOYMENT_TARGET = 15.1`
+
 ### 关键依赖兼容性
 
 | 依赖 | 版本 | 备注 |
 |------|------|------|
-| react-native-screens | ^4.27.0 | RN 0.85.3 兼容 |
-| react-native-svg | ^15.15.5 | Expo 56 配套 |
-| react-native-reanimated | ~4.3.0 | RN 0.85.3 兼容 |
-| react-native-worklets | ~0.8.0 | RN 0.85.3 兼容 |
+| react-native-screens | ~4.23.0 | RN 0.83.10 兼容 |
+| react-native-svg | 15.15.3 | Expo 55 配套 |
+| react-native-reanimated | 4.2.1 | RN 0.83.10 兼容 |
+| react-native-worklets | 0.7.4 | RN 0.83.10 兼容 |
 
 ## OCR 说明
 
@@ -230,7 +254,7 @@ cp app/build/outputs/apk/release/app-release.apk /vol1/1000/shanyun-build/shanyu
 ## 蓝牙打印
 
 - 支持型号：汉印 T260 蓝牙热敏打印机（HM-T260LR，双模 BR/EDR + LE）
-- **首选通道（SPP）**：经典蓝牙 RFCOMM（`createInsecureRfcommSocketToServiceRecord`，UUID `00001101-0000-1000-8000-00805F9B34FB`），与官方 App 相同
+- **首选通道（SPP，仅 Android）**：经典蓝牙 RFCOMM（`createInsecureRfcommSocketToServiceRecord`，UUID `00001101-0000-1000-8000-00805F9B34FB`），与官方 App 相同。**iOS 不支持 SPP**，走 BLE 通道。
 - **打印协议（ESC_POLI）**：实测打印机只识别位图数据，纯文本/CPCL 命令无响应。
   ```
   ESC @           1b 40          初始化
@@ -290,7 +314,9 @@ cp app/build/outputs/apk/release/app-release.apk /vol1/1000/shanyun-build/shanyu
 
 ### 打印通道优先级
 
-`printLabel()` 内部逻辑：SPP 已连接 → 走 ESC_POLI（`buildESCPOLILabel`）；否则有 BLE 写特征 → 走 CPCL（`buildCPCLLabel`）。SPP 是首选通道。
+`printLabel()` 内部逻辑：
+- **Android**：SPP 已连接 → 走 ESC_POLI（`buildESCPOLILabel`）；否则有 BLE 写特征 → 走 CPCL（`buildCPCLLabel`）。SPP 是首选通道。
+- **iOS**：SPP 不可用（`nativeSupport=false`），直接走 BLE 通道（ESC_POLI 位图）。
 
 ## 数据存储
 
@@ -301,7 +327,7 @@ cp app/build/outputs/apk/release/app-release.apk /vol1/1000/shanyun-build/shanyu
 
 ## 源码备份
 
-- 构建与备份服务器：`/home/Yw/shanyun-app`（100.66.1.3，曾为 192.168.1.9）
+- 构建与备份服务器：`/home/Yw/shanyun-app`（100.66.1.3，曾为 192.168.1.9，当前不可达）
 - APK 输出：`/home/Yw/shanyun-app/android/app/build/outputs/apk/release/app-release.apk`
 - 本地草稿（Termux）：`/data/data/com.termux/files/home/shanyun-app`
 - 手机固件备份：`/storage/emulated/0/TRIM/Download/飞牛下载/`
