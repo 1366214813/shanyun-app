@@ -1,14 +1,16 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Modal, FlatList, TextInput, Share } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Modal, FlatList, TextInput, Share, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as XLSX from 'xlsx';
+import * as DocumentPicker from 'expo-document-picker';
 import { useAppStore, THEMES, type ThemeColors, type StoreInfo } from '../store/useAppStore';
 import { getLogs, clearLogs, type LogEntry } from '../utils/logger';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { formatMoney, localDateKey } from '../utils/format';
+import { saveExcelToDownloads } from '../utils/exportData';
 
 export default function SettingsScreen() {
-  const { theme, setTheme, clearAllData, markupPercent, setMarkupPercent, storeInfo, setStoreInfo } = useAppStore();
+  const { theme, setTheme, clearAllData, markupPercent, setMarkupPercent, storeInfo, setStoreInfo, products, customers, orders, importData } = useAppStore();
   const tc: ThemeColors = THEMES[theme];
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logVisible, setLogVisible] = useState(false);
@@ -70,69 +72,90 @@ export default function SettingsScreen() {
       const data = JSON.parse(rawData);
       const wb = XLSX.utils.book_new();
       
-      // 商品表
       if (data.products && data.products.length > 0) {
         const productData = data.products.map((p: any) => ({
-          '商品名称': p.name,
-          '款号': p.code,
-          '分类': p.category,
-          '零售价': p.retailPrice,
-          '进货价': p.purchasePrice,
-          '库存': p.stock,
-          '预警库存': p.warningStock,
-          '单位': p.unit,
+          '商品名称': p.name, '款号': p.code, '分类': p.category,
+          '零售价': p.retailPrice, '进货价': p.purchasePrice, '库存': p.stock,
+          '预警库存': p.warningStock, '单位': p.unit,
         }));
-        const wsProducts = XLSX.utils.json_to_sheet(productData);
-        XLSX.utils.book_append_sheet(wb, wsProducts, '商品');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productData), '商品');
       }
       
-      // 客户表
       if (data.customers && data.customers.length > 0) {
         const customerData = data.customers.map((c: any) => ({
-          '客户姓名': c.name,
-          '电话': c.phone,
+          '客户姓名': c.name, '电话': c.phone,
           '会员等级': c.level === 'platinum' ? '铂金会员' : c.level === 'gold' ? '黄金会员' : c.level === 'vip' ? 'VIP' : '普通会员',
-          '积分': c.points,
-          '余额': c.balance,
-          '累计消费': c.totalSpent,
-          '生日': c.birthday,
+          '积分': c.points, '余额': c.balance, '累计消费': c.totalSpent, '生日': c.birthday,
         }));
-        const wsCustomers = XLSX.utils.json_to_sheet(customerData);
-        XLSX.utils.book_append_sheet(wb, wsCustomers, '客户');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customerData), '客户');
       }
       
-      // 订单表
       if (data.orders && data.orders.length > 0) {
         const orderData = data.orders.map((o: any) => ({
-          '订单日期': o.date,
-          '客户': o.customerName,
+          '订单日期': o.date, '客户': o.customerName,
           '商品明细': o.items.map((i: any) => `${i.productName}×${i.qty}`).join(', '),
-          '订单金额': o.total,
-          '成本': o.cost,
-          '利润': o.profit,
-          '支付方式': o.payMethod,
+          '订单金额': o.total, '成本': o.cost, '利润': o.profit, '支付方式': o.payMethod,
           '状态': o.status === 'completed' ? '完成' : o.status === 'cancelled' ? '取消' : '退货',
         }));
-        const wsOrders = XLSX.utils.json_to_sheet(orderData);
-        XLSX.utils.book_append_sheet(wb, wsOrders, '订单');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(orderData), '订单');
       }
       
-      // 生成Excel文件
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-      
-      // 保存文件并分享
-      const { File, Paths } = await import('expo-file-system');
       const fileName = `金豆库管_${localDateKey()}.xlsx`;
-      const file = new File(Paths.cache, fileName);
-      file.write(wbout, { encoding: 'base64' });
       
-      const result = await Share.share({
-        url: file.uri,
-        title: '金豆库管数据导出',
-      });
-      
+      if (Platform.OS === 'android') {
+        await saveExcelToDownloads(wbout, fileName);
+        Alert.alert('导出成功', `文件已导出：${fileName}`);
+      } else {
+        const { File, Paths } = await import('expo-file-system');
+        const file = new File(Paths.cache, fileName);
+        file.write(wbout, { encoding: 'base64' });
+        await Share.share({ url: file.uri, title: '金豆库管数据导出' });
+      }
     } catch (e: any) {
       Alert.alert('导出失败', e.message || '未知错误');
+    }
+  };
+
+  const handleImport = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+      
+      if (result.canceled || !result.assets?.[0]) return;
+      
+      const fileUri = result.assets[0].uri;
+      const { readAsStringAsync, EncodingType } = await import('expo-file-system');
+      const jsonStr = await readAsStringAsync(fileUri, { encoding: EncodingType.UTF8 });
+      const data = JSON.parse(jsonStr);
+      
+      if (!data.products && !data.customers && !data.orders) {
+        Alert.alert('格式错误', '文件中未找到有效的商品/客户/订单数据');
+        return;
+      }
+      
+      const counts = [];
+      if (data.products?.length) counts.push(`${data.products.length} 个商品`);
+      if (data.customers?.length) counts.push(`${data.customers.length} 个客户`);
+      if (data.orders?.length) counts.push(`${data.orders.length} 笔订单`);
+      
+      Alert.alert(
+        '确认导入',
+        `将导入：${counts.join('、')}？\n数据将追加到现有数据中。`,
+        [
+          { text: '取消', style: 'cancel' },
+          {
+            text: '导入', onPress: async () => {
+              await importData(data);
+              Alert.alert('导入成功', `已导入 ${counts.join('、')}`);
+            },
+          },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert('导入失败', e.message || '文件格式错误');
     }
   };
 
@@ -168,23 +191,57 @@ export default function SettingsScreen() {
   };
 
   const examplePrice = 100 * (1 + (Number(markupInput) || 0) / 100);
+  const totalStock = products.reduce((s, p) => s + (p.stock || 0), 0);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: tc.bg }]}>
       <View style={[styles.section, { backgroundColor: tc.card }]}>
-        <Text style={[styles.sectionTitle, { color: tc.subText }]}>店铺信息</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🏪</Text>
+          <Text style={[styles.sectionTitle, { color: tc.subText }]}>店铺信息</Text>
+        </View>
         <TouchableOpacity style={[styles.item, { borderBottomColor: tc.border }]} onPress={openStoreEdit}>
           <Text style={[styles.itemLabel, { color: tc.text }]}>店铺名称</Text>
           <Text style={[styles.itemValue, { color: tc.subText }]}>{storeInfo.name || '未设置'} ▸</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.item, { borderBottomColor: tc.border }]} onPress={openStoreEdit}>
+          <Text style={[styles.itemLabel, { color: tc.text }]}>联系电话</Text>
+          <Text style={[styles.itemValue, { color: tc.subText }]}>{storeInfo.phone || '未设置'} ▸</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.item, { borderBottomWidth: 0 }]} onPress={openStoreEdit}>
+          <Text style={[styles.itemLabel, { color: tc.text }]}>地址</Text>
+          <Text style={[styles.itemValue, { color: tc.subText, maxWidth: '60%', textAlign: 'right' }]} numberOfLines={1}>{storeInfo.address || '未设置'} ▸</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.section, { backgroundColor: tc.card }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>📊</Text>
+          <Text style={[styles.sectionTitle, { color: tc.subText }]}>数据概览</Text>
+        </View>
         <View style={[styles.item, { borderBottomColor: tc.border }]}>
-          <Text style={[styles.itemLabel, { color: tc.text }]}>应用名称</Text>
-          <Text style={[styles.itemValue, { color: tc.subText }]}>金豆库管</Text>
+          <Text style={[styles.itemLabel, { color: tc.text }]}>商品数</Text>
+          <Text style={[styles.statVal, { color: tc.primary }]}>{products.length} 款</Text>
+        </View>
+        <View style={[styles.item, { borderBottomColor: tc.border }]}>
+          <Text style={[styles.itemLabel, { color: tc.text }]}>客户数</Text>
+          <Text style={[styles.statVal, { color: tc.primary }]}>{customers.length} 人</Text>
+        </View>
+        <View style={[styles.item, { borderBottomColor: tc.border }]}>
+          <Text style={[styles.itemLabel, { color: tc.text }]}>总订单</Text>
+          <Text style={[styles.statVal, { color: tc.primary }]}>{orders.length} 笔</Text>
+        </View>
+        <View style={[styles.item, { borderBottomWidth: 0 }]}>
+          <Text style={[styles.itemLabel, { color: tc.text }]}>库存总量</Text>
+          <Text style={[styles.statVal, { color: tc.primary }]}>{totalStock} 件</Text>
         </View>
       </View>
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
-        <Text style={[styles.sectionTitle, { color: tc.subText }]}>定价设置</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>💰</Text>
+          <Text style={[styles.sectionTitle, { color: tc.subText }]}>定价设置</Text>
+        </View>
         <View style={[styles.itemCol, { borderBottomColor: tc.border }]}>
           <Text style={[styles.itemLabel, { color: tc.text }]}>进货价加价率 (%)</Text>
           <Text style={[styles.itemHint, { color: tc.subText }]}>零售价 = 进货价 + 进货价 × 加价率%</Text>
@@ -208,7 +265,10 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
-        <Text style={[styles.sectionTitle, { color: tc.subText }]}>外观设置</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🎨</Text>
+          <Text style={[styles.sectionTitle, { color: tc.subText }]}>外观设置</Text>
+        </View>
         <View style={[styles.item, { borderBottomColor: tc.border }]}>
           <Text style={[styles.itemLabel, { color: tc.text }]}>深色模式</Text>
           <Switch value={theme === 'dark'} onValueChange={(v) => setTheme(v ? 'dark' : 'light')} trackColor={{ true: tc.primary, false: '#ccc' }} />
@@ -216,9 +276,21 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
-        <Text style={[styles.sectionTitle, { color: tc.subText }]}>数据管理</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>🔧</Text>
+          <Text style={[styles.sectionTitle, { color: tc.subText }]}>数据管理</Text>
+        </View>
         <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handleExport}>
-          <Text style={[styles.itemBtnText, { color: tc.primary }]}>导出数据</Text>
+          <View style={styles.logBtnRow}>
+            <Text style={[styles.itemBtnText, { color: tc.primary }]}>导出 Excel 表格</Text>
+            <Text style={{ color: '#ccc', fontSize: 12 }}>↓</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handleImport}>
+          <View style={styles.logBtnRow}>
+            <Text style={[styles.itemBtnText, { color: tc.primary }]}>导入数据 (JSON)</Text>
+            <Text style={{ color: '#ccc', fontSize: 12 }}>↑</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.itemBtn, { borderBottomWidth: 0 }]} onPress={handleReset}>
           <Text style={[styles.itemBtnText, { color: '#FF6B6B' }]}>清空所有数据</Text>
@@ -227,7 +299,10 @@ export default function SettingsScreen() {
 
       {showLogs && (
         <View style={[styles.section, { backgroundColor: tc.card }]}>
-          <Text style={[styles.sectionTitle, { color: tc.subText }]}>调试</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionIcon}>🔍</Text>
+            <Text style={[styles.sectionTitle, { color: tc.subText }]}>调试</Text>
+          </View>
           <TouchableOpacity style={styles.itemBtn} onPress={() => { getLogs().then(setLogs); setLogVisible(true); }}>
             <View style={styles.logBtnRow}>
               <Text style={[styles.itemBtnText, { color: tc.primary }]}>运行日志</Text>
@@ -244,10 +319,13 @@ export default function SettingsScreen() {
       )}
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
-        <Text style={[styles.sectionTitle, { color: tc.subText }]}>关于</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>ℹ️</Text>
+          <Text style={[styles.sectionTitle, { color: tc.subText }]}>关于</Text>
+        </View>
         <TouchableOpacity style={[styles.item, { borderBottomColor: tc.border }]} onPress={handleVersionTap} activeOpacity={1}>
           <Text style={[styles.itemLabel, { color: tc.text }]}>版本</Text>
-          <Text style={[styles.itemValue, { color: tc.subText }]}>1.0.0</Text>
+          <Text style={[styles.itemValue, { color: tc.subText }]}>1.3.0</Text>
         </TouchableOpacity>
       </View>
 
@@ -315,9 +393,12 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   section: { borderRadius: 12, marginBottom: 16, overflow: 'hidden' },
-  sectionTitle: { fontSize: 13, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  item: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
-  itemCol: { paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 6 },
+  sectionIcon: { fontSize: 15 },
+  sectionTitle: { fontSize: 13 },
+  item: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  statVal: { fontSize: 14, fontWeight: '600' },
+  itemCol: { paddingVertical: 14, paddingHorizontal: 16 },
   itemLabel: { fontSize: 14 },
   itemValue: { fontSize: 14 },
   itemHint: { fontSize: 12, marginTop: 4 },

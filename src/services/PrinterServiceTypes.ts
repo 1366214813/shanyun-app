@@ -1,4 +1,4 @@
-export type LabelSize = '40x30' | '50x30' | '60x40' | '80x50' | '100x60' | '100x80';
+export type LabelSize = '40x30' | '40x30_info' | '60x40' | '80x50' | '100x60' | '100x80';
 
 export type LabelElementType = 'text' | 'barcode' | 'qrcode' | 'line' | 'rect';
 
@@ -24,7 +24,7 @@ export type LabelConfig = {
 
 export const LABEL_PRESETS: Record<LabelSize, { w: number; h: number; name: string }> = {
   '40x30': { w: 40, h: 30, name: '40×30mm 小标签' },
-  '50x30': { w: 50, h: 30, name: '50×30mm 标准' },
+  '40x30_info': { w: 40, h: 30, name: '40×30mm 信息' },
   '60x40': { w: 60, h: 40, name: '60×40mm 中号' },
   '80x50': { w: 80, h: 50, name: '80×50mm 大号' },
   '100x60': { w: 100, h: 60, name: '100×60mm 特大' },
@@ -61,6 +61,18 @@ function buildDefaultElements(size: LabelSize): LabelElement[] {
       { id: genElementId(), type: 'text', x: m, y: m, w: right - m, h: 5, fieldKey: 'randomSlogan', fontSizeMm: 2, bold: false, align: 'left' },
       { id: genElementId(), type: 'text', x: m, y: m + 6, w: right - m, h: 4, fieldKey: 'name', fontSizeMm: 3, bold: true, align: 'left' },
       { id: genElementId(), type: 'text', x: m, y: m + 11, w: right - m, h: 4, fieldKey: 'priceMy', fontSizeMm: 3, bold: true, align: 'left' },
+      { id: genElementId(), type: 'barcode', x: m, y: bottom - 6, w: right - m, h: 5, fieldKey: 'code', align: 'center' },
+    ];
+  }
+
+  // 40x30 信息模板：品名 + 款号+尺码同行 + 零售价 + 条码
+  if (size === '40x30_info') {
+    const halfW = Math.floor((right - m) / 2);
+    return [
+      { id: genElementId(), type: 'text', x: m, y: m, w: right - m, h: 4.5, fieldKey: 'name', fontSizeMm: 4, bold: true, align: 'left' },
+      { id: genElementId(), type: 'text', x: m, y: m + 5, w: halfW, h: 3, fieldKey: 'code', fontSizeMm: 2.5, bold: false, align: 'left' },
+      { id: genElementId(), type: 'text', x: m + halfW + 1, y: m + 5, w: halfW - 1, h: 3, fieldKey: 'size', fontSizeMm: 2.5, bold: false, align: 'left' },
+      { id: genElementId(), type: 'text', x: m, y: m + 9, w: right - m, h: 4.5, fieldKey: 'retailPrice', fontSizeMm: 4, bold: true, align: 'left' },
       { id: genElementId(), type: 'barcode', x: m, y: bottom - 6, w: right - m, h: 5, fieldKey: 'code', align: 'center' },
     ];
   }

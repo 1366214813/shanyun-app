@@ -77,25 +77,25 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: '#6C5CE7' }]}>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#6C5CE7' }]} onPress={() => navigation.navigate('开单')}>
           <Text style={styles.statLabel}>今日销售</Text>
           <Text style={styles.statValue}>¥{formatMoney(stats.sales)}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#00B894' }]}>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#00B894' }]} onPress={() => navigation.navigate('开单')}>
           <Text style={styles.statLabel}>今日利润</Text>
           <Text style={styles.statValue}>¥{formatMoney(stats.profit)}</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: '#FDCB6E' }]}>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#FDCB6E' }]} onPress={() => navigation.navigate('开单')}>
           <Text style={[styles.statLabel, { color: '#333' }]}>订单数</Text>
           <Text style={[styles.statValue, { color: '#333' }]}>{stats.orderCount} 单</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#E17055' }]}>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#E17055' }]} onPress={() => navigation.navigate('商品')}>
           <Text style={styles.statLabel}>库存总量</Text>
           <Text style={styles.statValue}>{totalStock} 件</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {trend.length > 0 && trend.some((t) => t.sales > 0) ? (

@@ -37,7 +37,7 @@ export type LabelTemplate = {
 
 export const BUILTIN_TEMPLATES: LabelTemplate[] = [
   { id: 'builtin_40x30', name: '40×30 小标签', config: buildDefaultConfig('40x30'), builtin: true },
-  { id: 'builtin_50x30', name: '50×30 标准', config: buildDefaultConfig('50x30'), builtin: true },
+  { id: 'builtin_40x30_info', name: '40×30 信息', config: buildDefaultConfig('40x30_info'), builtin: true },
   { id: 'builtin_60x40', name: '60×40 中号', config: buildDefaultConfig('60x40'), builtin: true },
 ];
 
@@ -74,6 +74,7 @@ interface AppStore {
   setMarkupPercent: (percent: number) => void;
   setStoreInfo: (info: Partial<StoreInfo>) => void;
   clearAllData: () => Promise<void>;
+  importData: (data: { products?: Product[]; customers?: Customer[]; orders?: Order[] }) => Promise<void>;
   getTodayStats: () => { sales: number; profit: number; orderCount: number };
   getWeekTrend: () => { date: string; sales: number; profit: number }[];
 }
@@ -365,6 +366,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
       labelConfig: DEFAULT_LABEL_CONFIG,
       labelTemplates: [{ id: 'default', name: '默认模板', config: DEFAULT_LABEL_CONFIG }],
       currentTemplateId: 'default',
+    });
+  },
+
+  importData: async (data) => {
+    set((s) => {
+      const nextProducts = data.products && data.products.length > 0
+        ? [...s.products, ...data.products.map(p => ({ ...p, id: p.id || genId('p'), storeId: p.storeId || s.currentStoreId }))]
+        : s.products;
+      const nextCustomers = data.customers && data.customers.length > 0
+        ? [...s.customers, ...data.customers.map(c => ({ ...c, id: c.id || genId('c') }))]
+        : s.customers;
+      const nextOrders = data.orders && data.orders.length > 0
+        ? [...s.orders, ...data.orders.map(o => ({ ...o, id: o.id || genId('o') }))]
+        : s.orders;
+      const next = { products: nextProducts, customers: nextCustomers, orders: nextOrders };
+      saveData({ ...s, ...next });
+      return next;
     });
   },
 
