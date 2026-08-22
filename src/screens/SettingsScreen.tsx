@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Modal, FlatList, TextInput, Share, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Modal, FlatList, TextInput, Share, Platform, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as XLSX from 'xlsx';
 import * as DocumentPicker from 'expo-document-picker';
@@ -8,20 +8,48 @@ import { getLogs, clearLogs, type LogEntry } from '../utils/logger';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { formatMoney, localDateKey } from '../utils/format';
 import { saveExcelToDownloads } from '../utils/exportData';
+import { supabase } from '../config/supabase';
+import { syncToCloud, pullFromCloud } from '../services/CloudSync';
+
+type Tab = 'basic' | 'pricing' | 'data';
+
+function Toast({ message, visible }: { message: string; visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <View style={toastStyles.container}>
+      <Text style={toastStyles.text}>{message}</Text>
+    </View>
+  );
+}
+const toastStyles = StyleSheet.create({
+  container: { position: 'absolute', bottom: 80, alignSelf: 'center', backgroundColor: '#333', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, zIndex: 999 },
+  text: { color: '#fff', fontSize: 14, fontWeight: '500' },
+});
 
 export default function SettingsScreen() {
   const { theme, setTheme, clearAllData, markupPercent, setMarkupPercent, storeInfo, setStoreInfo, products, customers, orders, importData } = useAppStore();
   const tc: ThemeColors = THEMES[theme];
+  const [activeTab, setActiveTab] = useState<Tab>('basic');
+  const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const [logVisible, setLogVisible] = useState(false);
   const [markupInput, setMarkupInput] = useState(String(markupPercent));
   const [editingStore, setEditingStore] = useState(false);
   const [storeName, setStoreName] = useState(storeInfo.name);
   const [storePhone, setStorePhone] = useState(storeInfo.phone);
   const [storeAddr, setStoreAddr] = useState(storeInfo.address);
+  const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
+  const [clearInput, setClearInput] = useState('');
   const [showLogs, setShowLogs] = useState(false);
   const lastTapRef = useRef(0);
   const navigation = useNavigation();
+
+  const showToast = (msg: string) => {
+    setToast({ msg, visible: true });
+    setTimeout(() => setToast({ msg: '', visible: false }), 2000);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -30,8 +58,52 @@ export default function SettingsScreen() {
       setStoreName(storeInfo.name);
       setStorePhone(storeInfo.phone);
       setStoreAddr(storeInfo.address);
+      supabase.auth.getUser().then(({ data }: { data: { user: any } }) => {
+        setUserEmail(data.user?.email || '');
+      });
     }, [markupPercent, storeInfo])
   );
+
+  const handleSyncToCloud = async () => {
+    setSyncing(true);
+    try {
+      await syncToCloud({ products, customers, orders, storeInfo });
+      showToast('数据已同步到云端');
+    } catch (e: any) {
+      Alert.alert('同步失败', e.message || '网络异常');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handlePullFromCloud = async () => {
+    Alert.alert('拉取云端数据', '将覆盖本地数据，确定继续？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '确定', onPress: async () => {
+          setSyncing(true);
+          try {
+            const cloudData = await pullFromCloud();
+            if (cloudData) {
+              await importData(cloudData);
+              Alert.alert('拉取成功', `商品 ${cloudData.products.length} 个，客户 ${cloudData.customers.length} 个，订单 ${cloudData.orders.length} 笔`);
+            }
+          } catch (e: any) {
+            Alert.alert('拉取失败', e.message || '网络异常');
+          } finally {
+            setSyncing(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleLogout = async () => {
+    Alert.alert('退出登录', '退出后需重新登录才能同步数据', [
+      { text: '取消', style: 'cancel' },
+      { text: '退出', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
+  };
 
   const handleVersionTap = () => {
     const now = Date.now();
@@ -47,21 +119,27 @@ export default function SettingsScreen() {
       Alert.alert('提示', '请输入有效的加价百分比');
       return;
     }
+    if (val < 5) {
+      Alert.alert('温馨提示', `当前加价率 ${val}%，利润接近 0，建议设定更高的加价率`, [
+        { text: '仍然保存', onPress: () => { setMarkupPercent(val); showToast(`加价率已设为 ${val}%`); } },
+        { text: '重新输入', style: 'cancel' },
+      ]);
+      return;
+    }
     setMarkupPercent(val);
-    Alert.alert('已保存', `加价率 ${val}%\n例：进价100 → 售价 ${100 * (1 + val / 100)}`);
+    showToast(`加价率已保存: ${val}%`);
   };
 
   const handleReset = () => {
-    Alert.alert('确认重置', '将清空所有数据？', [
-      { text: '取消' },
-      {
-        text: '重置', style: 'destructive', onPress: async () => {
-          await clearAllData();
-          await AsyncStorage.removeItem('jindou_data');
-          Alert.alert('成功', '数据已清空');
-        },
-      },
-    ]);
+    setClearConfirmVisible(true);
+    setClearInput('');
+  };
+
+  const doClearData = async () => {
+    setClearConfirmVisible(false);
+    await clearAllData();
+    await AsyncStorage.removeItem('jindou_data');
+    showToast('数据已清空');
   };
 
   const handleExport = async () => {
@@ -109,7 +187,8 @@ export default function SettingsScreen() {
       } else {
         const { File, Paths } = await import('expo-file-system');
         const file = new File(Paths.cache, fileName);
-        await file.write(wbout, { encoding: 'base64', overwrite: true });
+        if (file.exists) file.delete();
+        await file.write(wbout, { encoding: 'base64' });
         await Share.share({ url: file.uri, title: '金豆库管数据导出' });
       }
     } catch (e: any) {
@@ -136,8 +215,24 @@ export default function SettingsScreen() {
         Alert.alert('格式错误', '文件中未找到有效的商品/客户/订单数据');
         return;
       }
-      
-      const counts = [];
+
+      const warnings: string[] = [];
+      if (data.products) {
+        data.products.forEach((p: any, i: number) => {
+          if (!p.name) warnings.push(`商品#${i + 1}: 缺少名称`);
+          if (p.retailPrice !== undefined && p.retailPrice < 0) warnings.push(`${p.name || '商品'}: 零售价为负数`);
+          if (p.stock !== undefined && p.stock < 0) warnings.push(`${p.name || '商品'}: 库存为负数`);
+        });
+      }
+      if (warnings.length > 0) {
+        Alert.alert('数据校验', `发现 ${warnings.length} 个问题:\n${warnings.slice(0, 5).join('\n')}${warnings.length > 5 ? '\n...' : ''}`, [
+          { text: '取消', style: 'cancel' },
+          { text: '仍然导入', onPress: () => doImport(data) },
+        ]);
+        return;
+      }
+
+      const counts: string[] = [];
       if (data.products?.length) counts.push(`${data.products.length} 个商品`);
       if (data.customers?.length) counts.push(`${data.customers.length} 个客户`);
       if (data.orders?.length) counts.push(`${data.orders.length} 笔订单`);
@@ -147,12 +242,7 @@ export default function SettingsScreen() {
         `将导入：${counts.join('、')}？\n数据将追加到现有数据中。`,
         [
           { text: '取消', style: 'cancel' },
-          {
-            text: '导入', onPress: async () => {
-              await importData(data);
-              Alert.alert('导入成功', `已导入 ${counts.join('、')}`);
-            },
-          },
+          { text: '导入', onPress: () => doImport(data) },
         ]
       );
     } catch (e: any) {
@@ -160,10 +250,15 @@ export default function SettingsScreen() {
     }
   };
 
+  const doImport = async (data: any) => {
+    await importData(data);
+    showToast('导入成功');
+  };
+
   const handleSaveStore = () => {
     setStoreInfo({ name: storeName, phone: storePhone, address: storeAddr });
     setEditingStore(false);
-    Alert.alert('已保存');
+    showToast('店铺信息已保存');
   };
 
   const openStoreEdit = () => {
@@ -195,7 +290,19 @@ export default function SettingsScreen() {
   const totalStock = products.reduce((s, p) => s + (p.stock || 0), 0);
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: tc.bg }]}>
+    <View style={[styles.container, { backgroundColor: tc.bg }]}>
+      <Toast message={toast.msg} visible={toast.visible} />
+
+      <View style={[styles.tabBar, { backgroundColor: tc.card }]}>
+        {([['basic', '基本信息'], ['pricing', '定价'], ['data', '数据']] as [Tab, string][]).map(([key, label]) => (
+          <TouchableOpacity key={key} style={[styles.tab, activeTab === key && styles.tabActive]} onPress={() => setActiveTab(key)}>
+            <Text style={[styles.tabText, { color: activeTab === key ? tc.primary : tc.subText }]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+      {activeTab === 'basic' && (<>
       <View style={[styles.section, { backgroundColor: tc.card }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>🏪</Text>
@@ -237,7 +344,9 @@ export default function SettingsScreen() {
           <Text style={[styles.statVal, { color: tc.primary }]}>{totalStock} 件</Text>
         </View>
       </View>
+      </>)}
 
+      {activeTab === 'pricing' && (<>
       <View style={[styles.section, { backgroundColor: tc.card }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>💰</Text>
@@ -264,7 +373,9 @@ export default function SettingsScreen() {
           </Text>
         </View>
       </View>
+      </>)}
 
+      {activeTab === 'data' && (<>
       <View style={[styles.section, { backgroundColor: tc.card }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>🎨</Text>
@@ -272,9 +383,42 @@ export default function SettingsScreen() {
         </View>
         <View style={[styles.item, { borderBottomColor: tc.border }]}>
           <Text style={[styles.itemLabel, { color: tc.text }]}>深色模式</Text>
-          <Switch value={theme === 'dark'} onValueChange={(v) => setTheme(v ? 'dark' : 'light')} trackColor={{ true: tc.primary, false: '#ccc' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ color: tc.subText, fontSize: 13 }}>{theme === 'dark' ? '开启' : '关闭'}</Text>
+            <Switch value={theme === 'dark'} onValueChange={(v) => setTheme(v ? 'dark' : 'light')} trackColor={{ true: tc.primary, false: '#ccc' }} />
+          </View>
         </View>
       </View>
+
+      {userEmail ? (
+        <View style={[styles.section, { backgroundColor: tc.card }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionIcon}>☁️</Text>
+            <Text style={[styles.sectionTitle, { color: tc.subText }]}>云端同步</Text>
+          </View>
+          <View style={[styles.item, { borderBottomColor: tc.border }]}>
+            <Text style={[styles.itemLabel, { color: tc.text }]}>账号</Text>
+            <Text style={[styles.itemValue, { color: tc.subText }]}>{userEmail}</Text>
+          </View>
+          <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handleSyncToCloud} disabled={syncing}>
+            <View style={styles.logBtnRow}>
+              <Text style={[styles.itemBtnText, { color: tc.primary }]}>
+                {syncing ? '同步中...' : '上传数据到云端'}
+              </Text>
+              {syncing ? <ActivityIndicator size="small" color={tc.primary} /> : <Text style={{ color: '#ccc', fontSize: 12 }}>↑</Text>}
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handlePullFromCloud} disabled={syncing}>
+            <View style={styles.logBtnRow}>
+              <Text style={[styles.itemBtnText, { color: tc.primary }]}>从云端拉取数据</Text>
+              {syncing ? <ActivityIndicator size="small" color={tc.primary} /> : <Text style={{ color: '#ccc', fontSize: 12 }}>↓</Text>}
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.itemBtn, { borderBottomWidth: 0 }]} onPress={handleLogout}>
+            <Text style={[styles.itemBtnText, { color: '#FF6B6B' }]}>退出登录</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
         <View style={styles.sectionHeader}>
@@ -318,6 +462,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       )}
+      </>)}
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
         <View style={styles.sectionHeader}>
@@ -387,13 +532,46 @@ export default function SettingsScreen() {
           )}
         </View>
       </Modal>
+
+      <Modal visible={clearConfirmVisible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
+            <Text style={{ fontSize: 17, fontWeight: '600', color: '#333', marginBottom: 8 }}>确认清空数据</Text>
+            <Text style={{ fontSize: 14, color: '#666', marginBottom: 16 }}>此操作不可恢复。请输入 CLEAR 确认：</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16, textAlign: 'center', letterSpacing: 4, fontWeight: '600' }}
+              value={clearInput}
+              onChangeText={setClearInput}
+              placeholder="CLEAR"
+              autoCapitalize="characters"
+            />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#F0F0F0', alignItems: 'center' }} onPress={() => setClearConfirmVisible(false)}>
+                <Text style={{ fontSize: 14 }}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: clearInput === 'CLEAR' ? '#FF6B6B' : '#ccc', alignItems: 'center' }}
+                onPress={doClearData}
+                disabled={clearInput !== 'CLEAR'}
+              >
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>清空</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  section: { borderRadius: 12, marginBottom: 16, overflow: 'hidden' },
+  container: { flex: 1, padding: 0, paddingTop: 0 },
+  tabBar: { flexDirection: 'row', marginHorizontal: 16, marginTop: 12, borderRadius: 10, padding: 4, gap: 4 },
+  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  tabActive: { backgroundColor: '#F0EDFF' },
+  tabText: { fontSize: 14, fontWeight: '600' },
+  section: { borderRadius: 12, marginBottom: 16, overflow: 'hidden', marginHorizontal: 16 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 6 },
   sectionIcon: { fontSize: 15 },
   sectionTitle: { fontSize: 13 },

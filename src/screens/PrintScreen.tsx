@@ -257,16 +257,20 @@ export default function PrintScreen({ navigation }: any) {
     const isSelected = selectedProducts.has(item.id);
     const isPrinting = printing === item.id;
     const qty = quantities.get(item.id) || 1;
+    const isAbnormal = item.retailPrice <= 0 || !item.category || item.category === '未分类';
     return (
       <TouchableOpacity
-        style={[styles.productItem, isSelected && styles.productSelected]}
+        style={[styles.productItem, isSelected && styles.productSelected, isAbnormal && styles.productAbnormal]}
         onPress={() => toggleProduct(item.id)}
         activeOpacity={0.7}
       >
         <View style={styles.productInfo}>
           <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.productMeta}>{item.code} | {item.category}</Text>
-          <Text style={styles.productPrice}>¥{item.retailPrice}</Text>
+          <Text style={styles.productMeta}>{item.code} | {item.category || '未分类'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <Text style={styles.productPrice}>¥{item.retailPrice}</Text>
+            {isAbnormal && <Text style={styles.abnormalBadge}>⚠ 异常</Text>}
+          </View>
         </View>
         <View style={styles.qtyRow}>
           <TouchableOpacity
@@ -325,6 +329,11 @@ export default function PrintScreen({ navigation }: any) {
         <View style={styles.connStatus}>
           <View style={[styles.connDot, { backgroundColor: connected ? '#00B894' : '#E17055' }]} />
           <Text style={styles.connText}>{connected ? connectedName || '已连接' : '未连接'}</Text>
+          {!connected && (
+            <TouchableOpacity style={styles.connectNowBtn} onPress={handleScan}>
+              <Text style={styles.connectNowBtnText}>连接</Text>
+            </TouchableOpacity>
+          )}
           {connected && battery && (
             <View style={styles.batteryContainer}>
               <View style={styles.batteryIcon}>
@@ -466,6 +475,8 @@ const styles = StyleSheet.create({
   connStatus: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   connDot: { width: 8, height: 8, borderRadius: 4 },
   connText: { fontSize: 14, color: '#333' },
+  connectNowBtn: { backgroundColor: '#E17055', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginLeft: 8 },
+  connectNowBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   batteryContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 },
   batteryIcon: { width: 24, height: 12, borderWidth: 1, borderColor: '#999', borderRadius: 2, padding: 1 },
   batteryLevel: { height: '100%', borderRadius: 1 },
@@ -483,14 +494,16 @@ const styles = StyleSheet.create({
     borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'transparent',
   },
   productSelected: { borderColor: '#6C5CE7', backgroundColor: '#F8F6FF' },
+  productAbnormal: { borderColor: '#FF6B6B', borderLeftWidth: 3 },
   productInfo: { flex: 1 },
   productName: { fontSize: 15, fontWeight: '600', color: '#333', marginBottom: 4 },
   productMeta: { fontSize: 12, color: '#999' },
-  productPrice: { fontSize: 14, color: '#E17055', fontWeight: '600', marginTop: 4 },
+  productPrice: { fontSize: 14, color: '#E17055', fontWeight: '600' },
+  abnormalBadge: { fontSize: 11, color: '#FF6B6B', fontWeight: '600', backgroundColor: '#FFF0F0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', marginRight: 8 },
-  qtyBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
-  qtyBtnText: { fontSize: 16, fontWeight: '600', color: '#333' },
-  qtyText: { fontSize: 14, fontWeight: '600', color: '#333', marginHorizontal: 6, minWidth: 20, textAlign: 'center' },
+  qtyBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
+  qtyBtnText: { fontSize: 18, fontWeight: '700', color: '#333' },
+  qtyText: { fontSize: 15, fontWeight: '700', color: '#333', marginHorizontal: 8, minWidth: 24, textAlign: 'center' },
   printBtn: { backgroundColor: '#6C5CE7', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, minWidth: 60, alignItems: 'center' },
   printingBtn: { backgroundColor: '#999' },
   printBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },

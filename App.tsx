@@ -1,13 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Text, View } from 'react-native';
+import { Text, View, ActivityIndicator } from 'react-native';
 import { useAppStore, THEMES } from './src/store/useAppStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { logError } from './src/utils/logger';
+import { supabase } from './src/config/supabase';
 
+import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProductsScreen from './src/screens/ProductsScreen';
 import CustomersScreen from './src/screens/CustomersScreen';
@@ -65,21 +67,50 @@ export default function App() {
   const loadData = useAppStore((s) => s.loadData);
   const theme = useAppStore(s => s.theme);
   const tc = THEMES[theme];
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => { loadData(); }, []);
+
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F6FA' }}>
+        <ActivityIndicator size="large" color="#6C5CE7" />
+        <Text style={{ marginTop: 8, color: '#999' }}>加载中...</Text>
+      </View>
+    );
+  }
 
   return (
     <ErrorBoundary>
-      <NavigationContainer theme={theme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style={theme === 'dark' ? 'light' : 'light'} />
-        <Stack.Navigator>
-          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
-          <Stack.Screen name="商品" component={ProductsScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
-          <Stack.Screen name="客户" component={CustomersScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
-          <Stack.Screen name="开单" component={NewOrderScreen} options={{ headerTitle: '销售开单', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
-          <Stack.Screen name="蓝牙调试" component={MinimalBleScreen} options={{ headerTitle: '蓝牙调试', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
-          <Stack.Screen name="标签编辑" component={LabelEditorScreen} options={{ headerTitle: '标签编辑', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      {!user ? (
+        <AuthScreen onSkip={() => setUser(null)} />
+      ) : (
+        <NavigationContainer theme={theme === 'dark' ? DarkTheme : DefaultTheme}>
+          <StatusBar style={theme === 'dark' ? 'light' : 'light'} />
+          <Stack.Navigator>
+            <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+            <Stack.Screen name="商品" component={ProductsScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
+            <Stack.Screen name="客户" component={CustomersScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
+            <Stack.Screen name="开单" component={NewOrderScreen} options={{ headerTitle: '销售开单', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
+            <Stack.Screen name="蓝牙调试" component={MinimalBleScreen} options={{ headerTitle: '蓝牙调试', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
+            <Stack.Screen name="标签编辑" component={LabelEditorScreen} options={{ headerTitle: '标签编辑', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      )}
     </ErrorBoundary>
   );
 }
