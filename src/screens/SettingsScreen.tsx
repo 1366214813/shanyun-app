@@ -109,7 +109,7 @@ export default function SettingsScreen() {
       } else {
         const { File, Paths } = await import('expo-file-system');
         const file = new File(Paths.cache, fileName);
-        file.write(wbout, { encoding: 'base64' });
+        await file.write(wbout, { encoding: 'base64', overwrite: true });
         await Share.share({ url: file.uri, title: '金豆库管数据导出' });
       }
     } catch (e: any) {
@@ -127,8 +127,9 @@ export default function SettingsScreen() {
       if (result.canceled || !result.assets?.[0]) return;
       
       const fileUri = result.assets[0].uri;
-      const { readAsStringAsync, EncodingType } = await import('expo-file-system');
-      const jsonStr = await readAsStringAsync(fileUri, { encoding: EncodingType.UTF8 });
+      const { File } = await import('expo-file-system');
+      const file = new File(fileUri);
+      const jsonStr = await file.text();
       const data = JSON.parse(jsonStr);
       
       if (!data.products && !data.customers && !data.orders) {
