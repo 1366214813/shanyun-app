@@ -27,7 +27,14 @@ export type LabelTemplate = {
   id: string;
   name: string;
   config: LabelConfig;
+  builtin?: boolean;
 };
+
+export const BUILTIN_TEMPLATES: LabelTemplate[] = [
+  { id: 'builtin_40x30', name: '40×30 小标签', config: buildDefaultConfig('40x30'), builtin: true },
+  { id: 'builtin_50x30', name: '50×30 标准', config: buildDefaultConfig('50x30'), builtin: true },
+  { id: 'builtin_60x40', name: '60×40 中号', config: buildDefaultConfig('60x40'), builtin: true },
+];
 
 interface AppStore {
   products: Product[];
@@ -82,9 +89,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   currentStoreId: 'store_main',
   theme: 'light',
   isLoading: true,
-  labelConfig: DEFAULT_LABEL_CONFIG,
-  labelTemplates: [{ id: 'default', name: '默认模板', config: DEFAULT_LABEL_CONFIG }],
-  currentTemplateId: 'default',
+  labelConfig: BUILTIN_TEMPLATES[0].config,
+  labelTemplates: BUILTIN_TEMPLATES,
+  currentTemplateId: 'builtin_40x30',
   markupPercent: 0,
   storeInfo: { name: '金豆库管', phone: '', address: '' },
 
@@ -93,17 +100,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const saved = await AsyncStorage.getItem(STORAGE_KEY);
       if (saved) {
         const data = JSON.parse(saved);
-        let labelTemplates: LabelTemplate[] = [];
+        let userTemplates: LabelTemplate[] = [];
         if (Array.isArray(data.labelTemplates) && data.labelTemplates.length > 0) {
-          labelTemplates = data.labelTemplates.map((t: any) => ({
+          userTemplates = data.labelTemplates.map((t: any) => ({
             id: t.id || genId('tmpl'),
             name: t.name || '未命名模板',
             config: migrateLabelConfig(t.config),
+            builtin: t.builtin,
           }));
         } else {
           const single = migrateLabelConfig(data.labelConfig);
-          labelTemplates = [{ id: 'default', name: '默认模板', config: single }];
+          userTemplates = [{ id: 'default', name: '默认模板', config: single }];
         }
+        const labelTemplates = [...BUILTIN_TEMPLATES, ...userTemplates.filter(t => !t.builtin && t.id !== 'default')];
         const currentTemplateId = data.currentTemplateId && labelTemplates.some(t => t.id === data.currentTemplateId)
           ? data.currentTemplateId
           : (labelTemplates[0]?.id || 'default');
@@ -124,6 +133,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         set({
           ...emptyData,
           stores: [defaultStore],
+          labelTemplates: BUILTIN_TEMPLATES,
+          currentTemplateId: 'builtin_40x30',
+          labelConfig: BUILTIN_TEMPLATES[0].config,
           isLoading: false,
         });
       }
@@ -131,6 +143,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({
         ...emptyData,
         stores: [defaultStore],
+        labelTemplates: BUILTIN_TEMPLATES,
+        currentTemplateId: 'builtin_40x30',
+        labelConfig: BUILTIN_TEMPLATES[0].config,
         isLoading: false,
       });
     }
@@ -302,6 +317,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   deleteLabelTemplate: (id) => {
+    if (BUILTIN_TEMPLATES.some(t => t.id === id)) return;
     set((s) => {
       const templates = s.labelTemplates.filter(t => t.id !== id);
       const fallback = templates[0] || { id: 'default', name: '默认模板', config: DEFAULT_LABEL_CONFIG };
