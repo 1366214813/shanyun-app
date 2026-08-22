@@ -1,6 +1,6 @@
-# 金豆库管 v1.3.0
+# 金豆库管 v1.4.0
 
-服装店库存管理工具，支持 OCR 拍照识别小票/标签批量入库，蓝牙连接汉印T260打印吊牌。
+服装店库存管理工具，支持 OCR 拍照识别小票/标签批量入库，蓝牙连接汉印T260打印吊牌，Supabase 云端同步。
 
 ## 功能
 
@@ -17,8 +17,10 @@
   - **180+ 条随机文案** — 每张标签自动轮换搞笑文案（如"穿上我你就是这条街最靓的崽"）
   - **数量选择器** — 每个商品可设置打印张数，批量打印显示"X种, Y张"
   - **商品页快捷打印** — 商品列表每行直接打印该商品的吊牌（用当前模板）
-- **数据管理** — 导出 Excel 表格（商品/客户/订单）、JSON 数据导入（追加模式）、一键清空数据
-- **设置** — 店铺信息编辑（名称/电话/地址）、定价加价率设置、数据概览（商品数/客户数/总订单/库存总量）、深色模式、调试日志
+  - **异常数据标红** — 价格为0/未分类商品左侧红边框 + ⚠异常标签，打印页一目了然
+- **云端同步** — Supabase 注册/登录，数据上传/拉取云端，多设备同步
+- **数据管理** — 导出 Excel 表格（商品/客户/订单）、JSON 数据导入（追加模式，自动校验异常数据）、一键清空数据（需输入 CLEAR 二次确认）
+- **设置** — 三标签页（基本信息/定价/数据），店铺信息编辑（名称/电话/地址），定价加价率设置（低于5%温馨提示），数据概览，深色模式（带开关状态标签），调试日志，操作 Toast 反馈
 - **主题切换** — 深色/浅色主题，双击版本号查看日志
 
 ## 技术栈
@@ -36,13 +38,15 @@
 | jindou-spp | 1.0.0 | 经典蓝牙 SPP 模块（Expo Modules/Kotlin，RFCOMM 00001101） |
 | xlsx | - | Excel 表格导出 |
 | expo-document-picker | ~55.0.16 | JSON 数据导入 |
+| @supabase/supabase-js | - | 云端认证 + 数据库同步 |
 
 ## 项目结构
 
 ```
 shanyun-app/
-├── App.tsx                 # 导航配置（Stack Navigator: Main tabs + 商品/客户/开单）
+├── App.tsx                 # 导航配置（认证页 + Stack Navigator）
 ├── app.json                # Expo 配置（com.jindou.warehouse）
+├── supabase-schema.sql     # Supabase 数据库建表 SQL
 ├── react-native.config.js  # 自定义配置（onnxruntime cmake）
 ├── modules/
 │   └── jindou-spp/         # 经典蓝牙 SPP 原生模块（Expo Modules/Kotlin）
@@ -52,6 +56,7 @@ shanyun-app/
 │       └── android/              # Kotlin 实现（RFCOMM socket, 读/写/断开）
 ├── src/
 │   ├── screens/            # 页面组件
+│   │   ├── AuthScreen.tsx       # 登录/注册页（Supabase 认证）
 │   │   ├── HomeScreen.tsx       # 首页仪表盘（快捷操作+订单+客户）
 │   │   ├── OcrScreen.tsx        # OCR 入库（拍照+批量解析+自动补条码）
 │   │   ├── ProductsScreen.tsx   # 商品管理（自动条码 + 快捷打印）
@@ -67,7 +72,10 @@ shanyun-app/
 │   ├── services/
 │   │   ├── PrinterService.ts   # 蓝牙打印服务（SPP + BLE 双通道）
 │   │   ├── PrinterServiceTypes.ts # 标签预设/元素类型/模板类型/旧配置迁移
-│   │   └── LabelRenderer.ts    # 标签渲染（逐元素绘制）+ buildESCPOLILabel（ESC/POS 位图命令）
+│   │   ├── LabelRenderer.ts    # 标签渲染（逐元素绘制）+ buildESCPOLILabel（ESC/POS 位图命令）
+│   │   └── CloudSync.ts       # Supabase 云端同步（上传/拉取/删除）
+│   ├── config/
+│   │   └── supabase.ts        # Supabase 客户端配置
 │   ├── store/
 │   │   └── useAppStore.ts      # Zustand 全局状态（含多套标签模板 labelTemplates）
 │   ├── types/
@@ -243,11 +251,13 @@ shanyun-app/
 
 ## 数据存储
 
-- 全部数据存储在设备本地（AsyncStorage），Key: `jindou_data`
-- 无后端服务器，无登录注册
+- 本地存储：AsyncStorage，Key: `jindou_data`
+- 云端存储：Supabase PostgreSQL（行级安全，用户只能访问自己的数据）
+- 支持邮箱注册/登录
+- 支持云端上传/拉取同步（设置页 → 云端同步）
 - 支持导出 Excel 表格（商品/客户/订单三个工作表）
-- 支持 JSON 数据导入（追加模式，不覆盖现有数据）
-- 支持一键清空数据
+- 支持 JSON 数据导入（追加模式，自动校验异常数据）
+- 支持一键清空数据（需输入 CLEAR 二次确认）
 
 ## License
 
