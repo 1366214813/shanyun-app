@@ -4,6 +4,11 @@ import { Product, Customer, Order, Store } from '../types';
 import { mockProducts, mockCustomers, mockOrders, defaultStore } from '../mock/data';
 import { LabelConfig, DEFAULT_LABEL_CONFIG, migrateLabelConfig, buildDefaultConfig } from '../services/PrinterService';
 import { localDateKey, genId } from '../utils/format';
+import { logError } from '../utils/logger';
+
+function saveData(state: any) {
+  try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { logError('STORE', `AsyncStorage write failed: ${e}`); }
+}
 
 export type ThemeColors = {
   bg: string; card: string; text: string; subText: string; border: string;
@@ -166,7 +171,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         nextProducts = [...s.products, product];
       }
       const next = { products: nextProducts };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -189,11 +194,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       }
       const next = { products: existing };
-      try {
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next }));
-      } catch (e) {
-        console.error('[STORE] addProducts AsyncStorage write failed:', e);
-      }
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -201,7 +202,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateProduct: (id, data) => {
     set((s) => {
       const next = { products: s.products.map((p) => (p.id === id ? { ...p, ...data } : p)) };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -209,7 +210,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deleteProduct: (id) => {
     set((s) => {
       const next = { products: s.products.filter((p) => p.id !== id) };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -217,7 +218,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   addCustomer: (customer) => {
     set((s) => {
       const next = { customers: [...s.customers, customer] };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -225,7 +226,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateCustomer: (id, data) => {
     set((s) => {
       const next = { customers: s.customers.map((c) => (c.id === id ? { ...c, ...data } : c)) };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -233,7 +234,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   deleteCustomer: (id) => {
     set((s) => {
       const next = { customers: s.customers.filter((c) => c.id !== id) };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -249,7 +250,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           : c);
       }
       const full = { ...next, customers };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...full })); } catch {}
+      saveData({ ...s, ...full });
       return full;
     });
   },
@@ -265,14 +266,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
           : c);
       }
       const next = { orders: s.orders.filter((o) => o.id !== id), customers };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
 
   setTheme: (theme) => {
     set({ theme });
-    try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), theme })); } catch {}
+    saveData({ ...get(), theme });
   },
 
   setLabelConfig: (labelConfig) => {
@@ -281,7 +282,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ? s.labelTemplates.map(t => t.id === s.currentTemplateId ? { ...t, config: labelConfig } : t)
         : s.labelTemplates;
       const next = { labelConfig, labelTemplates: templates };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -297,7 +298,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: id,
         labelConfig: config,
       };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -310,7 +311,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: id,
         labelConfig: config,
       };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
     return id;
@@ -326,7 +327,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: s.currentTemplateId === id ? fallback.id : s.currentTemplateId,
         labelConfig: s.currentTemplateId === id ? fallback.config : s.labelConfig,
       };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
@@ -336,20 +337,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const t = s.labelTemplates.find(t => t.id === id);
       if (!t) return {};
       const next = { currentTemplateId: id, labelConfig: t.config };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },
 
   setMarkupPercent: (markupPercent) => {
     set({ markupPercent });
-    try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...get(), markupPercent })); } catch {}
+    saveData({ ...get(), markupPercent });
   },
 
   setStoreInfo: (info) => {
     set((s) => {
       const next = { storeInfo: { ...s.storeInfo, ...info } };
-      try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...s, ...next })); } catch {}
+      saveData({ ...s, ...next });
       return next;
     });
   },

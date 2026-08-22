@@ -427,7 +427,7 @@ function SwipeableItem({ item, index, onToggle, onUpdate, onDelete, tc }: {
           {[['名称', 'name'], ['款号', 'code'], ['分类', 'category'], ['颜色', 'color'], ['尺码', 'size'], ['零售价', 'retailPrice'], ['进货价', 'purchasePrice'], ['数量', 'qty']].map(([label, field]) => (
             <View key={field} style={styles.formRow}>
               <Text style={[styles.formLabel, { color: tc.subText }]}>{label}</Text>
-              <TextInput style={[styles.formInput, { borderColor: tc.border, color: tc.text }]} value={(item as any)[field]} onChangeText={(v) => onUpdate(index, field as keyof ParsedItem, v)} keyboardType={['零售价', '进货价', '数量'].includes(field as string) ? 'numeric' : 'default'} />
+              <TextInput style={[styles.formInput, { borderColor: tc.border, color: tc.text }]} value={String(item[field as keyof ParsedItem] ?? '')} onChangeText={(v) => onUpdate(index, field as keyof ParsedItem, v)} keyboardType={['零售价', '进货价', '数量'].includes(field as string) ? 'numeric' : 'default'} />
             </View>
           ))}
         </View>
