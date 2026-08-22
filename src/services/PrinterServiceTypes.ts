@@ -58,10 +58,10 @@ function buildDefaultElements(size: LabelSize): LabelElement[] {
   // 40x30 专用模板：文案 + 品名 + 我:XX块钱 + 条码
   if (size === '40x30') {
     return [
-      { id: genElementId(), type: 'text', x: m, y: m, w: right - m, h: 10, fieldKey: 'randomSlogan', fontSizeMm: 3, bold: false, align: 'left' },
-      { id: genElementId(), type: 'text', x: m, y: m + 11, w: right - m, h: 5, fieldKey: 'name', fontSizeMm: 3.5, bold: true, align: 'left' },
-      { id: genElementId(), type: 'text', x: m, y: m + 16.5, w: right - m, h: 5, fieldKey: 'priceMy', fontSizeMm: 4, bold: true, align: 'left' },
-      { id: genElementId(), type: 'barcode', x: m, y: bottom - 11, w: right - m, h: 8, fieldKey: 'code', align: 'center' },
+      { id: genElementId(), type: 'text', x: m, y: m, w: right - m, h: 5, fieldKey: 'randomSlogan', fontSizeMm: 2, bold: false, align: 'left' },
+      { id: genElementId(), type: 'text', x: m, y: m + 6, w: right - m, h: 4, fieldKey: 'name', fontSizeMm: 3, bold: true, align: 'left' },
+      { id: genElementId(), type: 'text', x: m, y: m + 11, w: right - m, h: 4, fieldKey: 'priceMy', fontSizeMm: 3, bold: true, align: 'left' },
+      { id: genElementId(), type: 'barcode', x: m, y: bottom - 6, w: right - m, h: 5, fieldKey: 'code', align: 'center' },
     ];
   }
 
