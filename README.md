@@ -243,24 +243,6 @@ shanyun-app/
 - 支持导出 Excel 表格（商品/客户/订单三个工作表）
 - 支持一键清空数据
 
-## 源码备份
-
-- GitHub：`git@github.com:1366214813/shanyun-app.git`（24+ tags，完整版本历史）
-- 本地（Termux）：`/data/data/com.termux/files/home/shanyun-app`
-- 本地备份包：`/data/data/com.termux/files/home/shanyun-app-backup-YYYYMMDD.tar.gz`
-
-### 版本标签
-
-| Tag | 说明 |
-|-----|------|
-| v1.3.0 | 代码审查修复 + CI 合并 |
-| v1.2.1 | 40x30 预设模板 + 55 条文案 + 数量选择器 |
-| v1.1.1 | BLE 打印加速（400B 分块 + 自动重连） |
-| v1.1.0 | BLE writeWithResponse + ESC/POS 修复 |
-| v1.0.0 | SDK 55 降级（支持 iOS 15.1+） |
-| v0.5.0 | 首个 TrollStore IPA |
-| v0.1.0 | 初始导入 |
-
 ## License
 
 MIT
