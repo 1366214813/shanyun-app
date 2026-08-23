@@ -5,12 +5,11 @@ import { supabase } from '../config/supabase';
 type Props = { onSkip?: () => void };
 
 export default function AuthScreen({ onSkip }: Props) {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleAuth = async () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('提示', '请输入邮箱和密码');
       return;
@@ -27,14 +26,9 @@ export default function AuthScreen({ onSkip }: Props) {
 
     setLoading(true);
     try {
-      const { error } = isLogin
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
-
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         Alert.alert('错误', error.message);
-      } else if (!isLogin) {
-        Alert.alert('注册成功', '请检查邮箱确认链接');
       }
     } catch (e: any) {
       Alert.alert('错误', e.message || '网络异常');
@@ -53,7 +47,7 @@ export default function AuthScreen({ onSkip }: Props) {
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.formTitle}>{isLogin ? '登录' : '注册'}</Text>
+          <Text style={styles.formTitle}>登录</Text>
 
           <Text style={styles.label}>邮箱</Text>
           <TextInput
@@ -75,14 +69,8 @@ export default function AuthScreen({ onSkip }: Props) {
             secureTextEntry
           />
 
-          <TouchableOpacity style={[styles.btn, loading && styles.btnDisabled]} onPress={handleAuth} disabled={loading}>
-            <Text style={styles.btnText}>{loading ? '处理中...' : isLogin ? '登录' : '注册'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-            <Text style={styles.switchText}>
-              {isLogin ? '没有账号？立即注册' : '已有账号？去登录'}
-            </Text>
+          <TouchableOpacity style={[styles.btn, loading && styles.btnDisabled]} onPress={handleLogin} disabled={loading}>
+            <Text style={styles.btnText}>{loading ? '处理中...' : '登录'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -110,7 +98,6 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: '#6C5CE7', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 8 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  switchText: { color: '#6C5CE7', textAlign: 'center', marginTop: 16, fontSize: 14 },
   skipBtn: { alignItems: 'center', marginTop: 24 },
   skipText: { color: '#999', fontSize: 14 },
 });
