@@ -15,10 +15,13 @@ export type LabelElement = {
   bold?: boolean;
   align?: 'left' | 'center' | 'right';
   thicknessMm?: number; // line/rect 线宽
+  offsetX?: number; // mm, 水平偏移
+  offsetY?: number; // mm, 垂直偏移
 };
 
 export type LabelConfig = {
   size: LabelSize;
+  name?: string; // 模板名称
   elements: LabelElement[];
 };
 
@@ -40,7 +43,7 @@ export const FIELD_KEYS: { key: string; label: string }[] = [
   { key: 'retailPrice', label: '零售价' },
   { key: 'purchasePrice', label: '进货价' },
   { key: 'randomSlogan', label: '随机文案' },
-  { key: 'priceMy', label: '我:XX块钱' },
+  { key: 'priceMy', label: '价格' },
 ];
 
 let elementSeq = 0;
@@ -55,13 +58,15 @@ function buildDefaultElements(size: LabelSize): LabelElement[] {
   const right = w - m;
   const bottom = h - m;
 
-  // 40x30 专用模板：文案 + 品名 + 我:XX块钱 + 条码
+  // 40x30 专用模板：文案 + 品名 + 价格 + 条码（2.5mm边距）
   if (size === '40x30') {
+    const m = 2.5;
+    const bw = w - m * 2; // 35mm usable width
     return [
-      { id: genElementId(), type: 'text', x: m, y: m, w: right - m, h: 5, fieldKey: 'randomSlogan', fontSizeMm: 2, bold: false, align: 'left' },
-      { id: genElementId(), type: 'text', x: m, y: m + 6, w: right - m, h: 4, fieldKey: 'name', fontSizeMm: 3, bold: true, align: 'left' },
-      { id: genElementId(), type: 'text', x: m, y: m + 11, w: right - m, h: 4, fieldKey: 'priceMy', fontSizeMm: 3, bold: true, align: 'left' },
-      { id: genElementId(), type: 'barcode', x: m, y: bottom - 6, w: right - m, h: 5, fieldKey: 'code', align: 'center' },
+      { id: genElementId(), type: 'text', x: m, y: m, w: bw, h: 4.2, fieldKey: 'randomSlogan', fontSizeMm: 3, bold: false, align: 'left' },
+      { id: genElementId(), type: 'text', x: m, y: m + 5.2, w: bw, h: 4.9, fieldKey: 'name', fontSizeMm: 4.9, bold: true, align: 'center' },
+      { id: genElementId(), type: 'text', x: m, y: m + 11.1, w: bw, h: 4.2, fieldKey: 'priceMy', fontSizeMm: 4.2, bold: true, align: 'center' },
+      { id: genElementId(), type: 'barcode', x: m, y: h - m - 8 - 4, w: bw, h: 8, fieldKey: 'code', align: 'center' },
     ];
   }
 
@@ -146,7 +151,7 @@ export function fieldValue(data: LabelData, key: string): string {
     case 'retailPrice': return data.retailPrice > 0 ? `¥${data.retailPrice}` : '';
     case 'purchasePrice': return data.purchasePrice > 0 ? `进:¥${data.purchasePrice}` : '';
     case 'randomSlogan': return getRandomSlogan();
-    case 'priceMy': return data.retailPrice > 0 ? `我:${data.retailPrice}块钱` : '';
+    case 'priceMy': return data.retailPrice > 0 ? `¥${data.retailPrice}` : '';
     default: return '';
   }
 }

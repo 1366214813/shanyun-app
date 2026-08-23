@@ -322,6 +322,36 @@ export default function LabelEditorScreen({ route, navigation }: any) {
                 </TouchableOpacity>
               </View>
             )}
+            <View style={styles.panelRow}>
+              <Text style={styles.optLabel}>水平偏移</Text>
+              <View style={styles.optBtns}>
+                <TouchableOpacity style={styles.optBtn} onPress={() => updateEl(selected.id, { offsetX: (selected.offsetX || 0) - 0.5 })}>
+                  <Text style={styles.optBtnText}>-0.5</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optBtn} onPress={() => updateEl(selected.id, { offsetX: 0 })}>
+                  <Text style={styles.optBtnText}>归零</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optBtn} onPress={() => updateEl(selected.id, { offsetX: (selected.offsetX || 0) + 0.5 })}>
+                  <Text style={styles.optBtnText}>+0.5</Text>
+                </TouchableOpacity>
+                <Text style={[styles.optBtnText, { minWidth: 40, textAlign: 'center' }]}>{(selected.offsetX || 0).toFixed(1)}mm</Text>
+              </View>
+            </View>
+            <View style={styles.panelRow}>
+              <Text style={styles.optLabel}>垂直偏移</Text>
+              <View style={styles.optBtns}>
+                <TouchableOpacity style={styles.optBtn} onPress={() => updateEl(selected.id, { offsetY: (selected.offsetY || 0) - 0.5 })}>
+                  <Text style={styles.optBtnText}>-0.5</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optBtn} onPress={() => updateEl(selected.id, { offsetY: 0 })}>
+                  <Text style={styles.optBtnText}>归零</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optBtn} onPress={() => updateEl(selected.id, { offsetY: (selected.offsetY || 0) + 0.5 })}>
+                  <Text style={styles.optBtnText}>+0.5</Text>
+                </TouchableOpacity>
+                <Text style={[styles.optBtnText, { minWidth: 40, textAlign: 'center' }]}>{(selected.offsetY || 0).toFixed(1)}mm</Text>
+              </View>
+            </View>
             {(selected.type === 'line' || selected.type === 'rect') && (
               <View style={styles.panelRow}>
                 <Text style={styles.optLabel}>线宽</Text>

@@ -127,8 +127,8 @@ export async function renderLabelBitmap(data: LabelData, config: LabelConfig): P
 
   const els = config.elements || [];
   for (const el of els) {
-    const x = Math.round(el.x * PX_PER_MM);
-    const y = Math.round(el.y * PX_PER_MM);
+    const x = Math.round((el.x + (el.offsetX || 0)) * PX_PER_MM);
+    const y = Math.round((el.y + (el.offsetY || 0)) * PX_PER_MM);
     const wPx = Math.max(1, Math.round(el.w * PX_PER_MM));
     const hPx = Math.max(1, Math.round(el.h * PX_PER_MM));
 
