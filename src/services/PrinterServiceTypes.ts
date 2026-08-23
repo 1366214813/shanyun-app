@@ -63,10 +63,10 @@ function buildDefaultElements(size: LabelSize): LabelElement[] {
     const m = 2.5;
     const bw = w - m * 2; // 35mm usable width
     return [
-      { id: genElementId(), type: 'text', x: m, y: m, w: bw, h: 4.2, fieldKey: 'randomSlogan', fontSizeMm: 3, bold: false, align: 'left' },
-      { id: genElementId(), type: 'text', x: m, y: m + 5.2, w: bw, h: 4.9, fieldKey: 'name', fontSizeMm: 4.9, bold: true, align: 'center' },
-      { id: genElementId(), type: 'text', x: m, y: m + 11.1, w: bw, h: 4.2, fieldKey: 'priceMy', fontSizeMm: 4.2, bold: true, align: 'center' },
-      { id: genElementId(), type: 'barcode', x: m, y: h - m - 8 - 4, w: bw, h: 8, fieldKey: 'code', align: 'center' },
+      { id: genElementId(), type: 'text', x: m, y: 1, w: bw, h: 9, fieldKey: 'randomSlogan', fontSizeMm: 3, bold: false, align: 'left' },
+      { id: genElementId(), type: 'text', x: m, y: 11, w: bw, h: 5, fieldKey: 'name', fontSizeMm: 4.9, bold: true, align: 'center' },
+      { id: genElementId(), type: 'text', x: m, y: 17, w: bw, h: 4, fieldKey: 'priceMy', fontSizeMm: 4.2, bold: true, align: 'center' },
+      { id: genElementId(), type: 'barcode', x: m, y: 22, w: bw, h: 6, fieldKey: 'code', align: 'center' },
     ];
   }
 
@@ -158,11 +158,11 @@ export function fieldValue(data: LabelData, key: string): string {
 
 const SLOGANS = [
   '我带给你不仅好心情\n还有好运气',
-  '你要昂首挺胸\n你要勇敢自信\n你要热烈漂亮',
-  '选我啊！姐妹！\n一条顶天立地\n又好看的裤子',
-  '我好喜欢我自己\n我的刺绣真好看\n我特喜欢',
+  '你要昂首挺胸\n你要勇敢自信',
+  '选我啊！姐妹！\n又好看的裤子',
+  '我好喜欢我自己\n我的刺绣真好看',
   '曾经的我想靠脸吃饭\n可是我妈想靠价格',
-  '我个人觉得\n我比显微露可爱一万倍\n对吧！主人！',
+  '我个人觉得\n我比显微露可爱一万倍',
   '我不仅是一件衣服\n我是热爱生活的意义',
   '人生就应该多尝试\n衣服就应该多试穿',
   '别看我价格美丽\n我质量也很能打',

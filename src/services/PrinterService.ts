@@ -18,6 +18,7 @@ import {
   FIELD_KEYS,
   genElementId,
   fieldValue,
+  getRandomSlogan,
   type LabelConfig,
   type LabelData,
   type LabelElement,
@@ -47,13 +48,14 @@ export {
   buildDefaultConfig,
   FIELD_KEYS,
   genElementId,
-  fieldValue,
   type LabelSize,
   type LabelConfig,
   type LabelData,
   type LabelElement,
   type LabelElementType,
 } from './PrinterServiceTypes';
+
+export { fieldValue, getRandomSlogan };
 
 /** 兼容旧版字段引用（已废弃，保留类型以便迁移代码编译） */
 export type LabelField = {

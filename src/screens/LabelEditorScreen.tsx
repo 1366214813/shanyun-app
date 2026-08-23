@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { useAppStore, THEMES } from '../store/useAppStore';
 import {
-  LABEL_PRESETS, FIELD_KEYS, genElementId, buildDefaultConfig,
-  type LabelConfig, type LabelElement, type LabelSize,
+  LABEL_PRESETS, FIELD_KEYS, genElementId, buildDefaultConfig, fieldValue, getRandomSlogan,
+  type LabelConfig, type LabelElement, type LabelSize, type LabelData,
 } from '../services/PrinterService';
 
 const PX_PER_MM = 8; // 编辑画布缩放：1mm = 8px
@@ -183,10 +183,22 @@ export default function LabelEditorScreen({ route, navigation }: any) {
     updateEl(selected.id, { fieldKey: key });
   };
 
+  const sampleData: LabelData = {
+    name: '示例连衣裙', code: 'YL2026001', category: '女装',
+    color: '白色', size: 'M', retailPrice: 299, purchasePrice: 159,
+  };
+
+  const getElPreviewText = (el: LabelElement): string => {
+    if (el.type !== 'text') return '';
+    if (el.fieldKey) return fieldValue(sampleData, el.fieldKey);
+    return el.text || '';
+  };
+
   const renderElementBox = (el: LabelElement) => {
     const isSel = el.id === selectedIdRef.current;
     const pan = getPan(el.id);
     const resizePan = isSel ? getResizePan(el.id) : null;
+    const previewText = getElPreviewText(el);
     return (
       <View
         key={el.id}
@@ -201,9 +213,32 @@ export default function LabelEditorScreen({ route, navigation }: any) {
         }]}
       >
         <View style={styles.elHit} pointerEvents="none">
-          <Text style={styles.elType}>
-            {el.type === 'text' ? 'T' : el.type === 'barcode' ? '≡' : el.type === 'qrcode' ? '▦' : el.type === 'line' ? '—' : '▢'}
-          </Text>
+          {el.type === 'text' ? (
+            previewText ? (
+              <Text style={[styles.elPreviewText, {
+                fontSize: Math.max(6, (el.fontSizeMm || 4) * 2.2),
+                fontWeight: el.bold ? '700' : '400',
+                textAlign: el.align || 'left',
+              }]} numberOfLines={3}>{previewText}</Text>
+            ) : (
+              <Text style={styles.elType}>T</Text>
+            )
+          ) : el.type === 'barcode' ? (
+            <View style={{ alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', gap: 1, marginBottom: 2 }}>
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <View key={i} style={{ width: i % 3 === 0 ? 2 : 1, height: 16, backgroundColor: '#000' }} />
+                ))}
+              </View>
+              <Text style={{ fontSize: 7, fontFamily: 'monospace', color: '#333' }}>{sampleData.code}</Text>
+            </View>
+          ) : el.type === 'qrcode' ? (
+            <Text style={styles.elType}>▦</Text>
+          ) : el.type === 'line' ? (
+            <Text style={styles.elType}>—</Text>
+          ) : (
+            <Text style={styles.elType}>▢</Text>
+          )}
           {isSel && <Text style={styles.elSize}>{Math.round(el.w)}×{Math.round(el.h)}mm</Text>}
         </View>
         {isSel && resizePan && (
@@ -421,6 +456,7 @@ const styles = StyleSheet.create({
   elBox: { position: 'absolute', borderWidth: 1, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
   elHit: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
   elType: { fontSize: 10, color: '#888', fontWeight: '700' },
+  elPreviewText: { color: '#000', paddingHorizontal: 2 },
   elSize: { fontSize: 8, color: '#6C5CE7', marginTop: 2 },
   resizeHandle: { position: 'absolute', right: -9, bottom: -9, width: 18, height: 18, borderWidth: 1.5, borderRadius: 9, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   resizeDot: { width: 6, height: 6, borderRadius: 3 },

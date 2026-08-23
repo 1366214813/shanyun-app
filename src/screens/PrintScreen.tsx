@@ -8,7 +8,7 @@ import { useAppStore, THEMES } from '../store/useAppStore';
 import {
   scanSppDevices, connectToDeviceSpp, scanDevices, connectToDevice, printLabel, disconnect, isConnected, getConnectedName,
   queryBattery, getLastBatteryInfo, setOnConnectionChange, checkConnection,
-  LABEL_PRESETS,
+  LABEL_PRESETS, fieldValue, getRandomSlogan,
   type ScannedDevice, type LabelConfig, type LabelData, type BatteryInfo,
 } from '../services/PrinterService';
 import type { Product } from '../types';
@@ -21,17 +21,7 @@ function LabelPreview({ data, config }: { data: LabelData; config: LabelConfig }
 
   const elValue = (el: any): string => {
     if (el.type !== 'text') return '';
-    if (el.fieldKey) {
-      switch (el.fieldKey) {
-        case 'name': return data.name || '商品';
-        case 'code': return data.code || '-';
-        case 'category': return data.category || '';
-        case 'color': return data.color || '';
-        case 'size': return data.size || '';
-        case 'retailPrice': return data.retailPrice > 0 ? `¥${data.retailPrice}` : '';
-        case 'purchasePrice': return data.purchasePrice > 0 ? `进货: ¥${data.purchasePrice}` : '';
-      }
-    }
+    if (el.fieldKey) return fieldValue(data, el.fieldKey);
     return el.text || '';
   };
 
@@ -52,7 +42,20 @@ function LabelPreview({ data, config }: { data: LabelData; config: LabelConfig }
                 fontSize: (el.fontSizeMm || 4) * scale,
                 fontWeight: el.bold ? '700' : '400',
                 textAlign: el.align || 'left',
-              }]} numberOfLines={1}>{value}</Text>
+              }]} numberOfLines={3}>{value}</Text>
+            );
+          }
+          case 'barcode': {
+            const value = el.fieldKey ? fieldValue(data, el.fieldKey) : (el.text || '');
+            return (
+              <View key={el.id} style={{ position: 'absolute', left: x, top: y, width: ew, height: eh, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ flexDirection: 'row', gap: 1, marginBottom: 4 }}>
+                  {Array.from({ length: 30 }).map((_, i) => (
+                    <View key={i} style={{ width: i % 3 === 0 ? 2 : 1, height: eh * 0.6, backgroundColor: '#000' }} />
+                  ))}
+                </View>
+                <Text style={{ fontSize: 10, fontFamily: 'monospace', color: '#000' }}>{value}</Text>
+              </View>
             );
           }
           case 'line':
