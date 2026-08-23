@@ -15,6 +15,11 @@ export default function AuthScreen({ onSkip }: Props) {
       Alert.alert('提示', '请输入邮箱和密码');
       return;
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('提示', '请输入正确的邮箱格式（如：abc@example.com）');
+      return;
+    }
     if (password.length < 6) {
       Alert.alert('提示', '密码至少 6 位');
       return;
