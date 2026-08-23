@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Modal, FlatList, TextInput, Share, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Modal, FlatList, TextInput, Share, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as XLSX from 'xlsx';
 import * as DocumentPicker from 'expo-document-picker';
@@ -8,8 +8,6 @@ import { getLogs, clearLogs, type LogEntry } from '../utils/logger';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { formatMoney, localDateKey } from '../utils/format';
 import { saveExcelToDownloads } from '../utils/exportData';
-import { supabase } from '../config/supabase';
-import { syncToCloud, pullFromCloud } from '../services/CloudSync';
 
 type Tab = 'basic' | 'pricing' | 'data';
 
@@ -32,8 +30,6 @@ export default function SettingsScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('basic');
   const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [syncing, setSyncing] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
   const [logVisible, setLogVisible] = useState(false);
   const [markupInput, setMarkupInput] = useState(String(markupPercent));
   const [editingStore, setEditingStore] = useState(false);
@@ -58,52 +54,8 @@ export default function SettingsScreen() {
       setStoreName(storeInfo.name);
       setStorePhone(storeInfo.phone);
       setStoreAddr(storeInfo.address);
-      supabase.auth.getUser().then(({ data }: { data: { user: any } }) => {
-        setUserEmail(data.user?.email || '');
-      });
     }, [markupPercent, storeInfo])
   );
-
-  const handleSyncToCloud = async () => {
-    setSyncing(true);
-    try {
-      await syncToCloud({ products, customers, orders, storeInfo });
-      showToast('数据已同步到云端');
-    } catch (e: any) {
-      Alert.alert('同步失败', e.message || '网络异常');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handlePullFromCloud = async () => {
-    Alert.alert('拉取云端数据', '将覆盖本地数据，确定继续？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '确定', onPress: async () => {
-          setSyncing(true);
-          try {
-            const cloudData = await pullFromCloud();
-            if (cloudData) {
-              await importData(cloudData);
-              Alert.alert('拉取成功', `商品 ${cloudData.products.length} 个，客户 ${cloudData.customers.length} 个，订单 ${cloudData.orders.length} 笔`);
-            }
-          } catch (e: any) {
-            Alert.alert('拉取失败', e.message || '网络异常');
-          } finally {
-            setSyncing(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleLogout = async () => {
-    Alert.alert('退出登录', '退出后需重新登录才能同步数据', [
-      { text: '取消', style: 'cancel' },
-      { text: '退出', style: 'destructive', onPress: () => supabase.auth.signOut() },
-    ]);
-  };
 
   const handleVersionTap = () => {
     const now = Date.now();
@@ -389,36 +341,6 @@ export default function SettingsScreen() {
           </View>
         </View>
       </View>
-
-      {userEmail ? (
-        <View style={[styles.section, { backgroundColor: tc.card }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionIcon}>☁️</Text>
-            <Text style={[styles.sectionTitle, { color: tc.subText }]}>云端同步</Text>
-          </View>
-          <View style={[styles.item, { borderBottomColor: tc.border }]}>
-            <Text style={[styles.itemLabel, { color: tc.text }]}>账号</Text>
-            <Text style={[styles.itemValue, { color: tc.subText }]}>{userEmail}</Text>
-          </View>
-          <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handleSyncToCloud} disabled={syncing}>
-            <View style={styles.logBtnRow}>
-              <Text style={[styles.itemBtnText, { color: tc.primary }]}>
-                {syncing ? '同步中...' : '上传数据到云端'}
-              </Text>
-              {syncing ? <ActivityIndicator size="small" color={tc.primary} /> : <Text style={{ color: '#ccc', fontSize: 12 }}>↑</Text>}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handlePullFromCloud} disabled={syncing}>
-            <View style={styles.logBtnRow}>
-              <Text style={[styles.itemBtnText, { color: tc.primary }]}>从云端拉取数据</Text>
-              {syncing ? <ActivityIndicator size="small" color={tc.primary} /> : <Text style={{ color: '#ccc', fontSize: 12 }}>↓</Text>}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.itemBtn, { borderBottomWidth: 0 }]} onPress={handleLogout}>
-            <Text style={[styles.itemBtnText, { color: '#FF6B6B' }]}>退出登录</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
 
       <View style={[styles.section, { backgroundColor: tc.card }]}>
         <View style={styles.sectionHeader}>
