@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, Alert, Modal, ScrollView, Image, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useAppStore, THEMES } from '../store/useAppStore';
 import { formatMoney, genId, genBarcode, categoryEmoji } from '../utils/format';
@@ -9,6 +9,11 @@ import { printLabel, isConnected } from '../services/PrinterService';
 
 const SCREEN_W = Dimensions.get('window').width;
 const THUMB_SIZE = 52;
+
+const SORT_OPTIONS: [ 'name' | 'code' | 'price' | 'stock' | 'time', string ][] = [
+  ['name', '名称'], ['code', '款号'], ['price', '价格↓'], ['stock', '库存↑'], ['time', '最新'],
+];
+const QTY_PRESETS = [1, 2, 3, 5, 10];
 
 function getDocDir(): Directory { return new Directory(Paths.document, 'product_images'); }
 async function ensureDocDir(): Promise<Directory> {
@@ -44,22 +49,25 @@ export default function ProductsScreen() {
 
   useEffect(() => { loadData(); }, []);
 
-  const filtered = products
+  const filtered = useMemo(() => products
     .filter((p) => p.storeId === currentStoreId)
     .filter((p) => !search || p.name.includes(search) || p.code.includes(search))
     .filter((p) => catFilter === 'all' || p.category === catFilter)
     .sort((a, b) => {
       switch (sortBy) {
-        case 'name': return a.name.localeCompare(b.name);
+        case 'name': return a.name.localeCompare(b.name, 'zh-CN');
         case 'code': return a.code.localeCompare(b.code);
         case 'price': return b.retailPrice - a.retailPrice;
         case 'stock': return a.stock - b.stock;
         case 'time': return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         default: return 0;
       }
-    });
+    }), [products, currentStoreId, search, catFilter, sortBy]);
 
-  const categories = ['all', ...new Set(products.map((p) => p.category).filter(Boolean))];
+  const categories = useMemo(
+    () => ['all', ...new Set(products.map((p) => p.category).filter(Boolean))],
+    [products],
+  );
 
   const openAdd = () => { setEditing(null); setFormName(''); setFormCode(genBarcode()); setFormCategory('上衣'); setFormRetailPrice(''); setFormPurchasePrice(''); setFormStock(''); setFormWarningStock('10'); setFormImageUri(''); setModalVisible(true); };
   const openEdit = (p: Product) => { setEditing(p); setFormName(p.name); setFormCode(p.code); setFormCategory(p.category); setFormRetailPrice(String(p.retailPrice)); setFormPurchasePrice(String(p.purchasePrice)); setFormStock(String(p.stock)); setFormWarningStock(String(p.warningStock)); setFormImageUri(p.imageUri || ''); setModalVisible(true); };
@@ -90,17 +98,31 @@ let savedUri = formImageUri;
   const handleDelete = (id: string, name: string) => { Alert.alert('确认删除', `删除「${name}」？`, [{ text: '取消' }, { text: '删除', style: 'destructive', onPress: () => deleteProduct(id) }]); };
 
   const [printingId, setPrintingId] = useState<string | null>(null);
-  const handlePrintItem = async (item: Product) => {
+  const [printTarget, setPrintTarget] = useState<Product | null>(null);
+  const [printQty, setPrintQty] = useState(1);
+
+  const openPrintSheet = (item: Product) => {
     if (!isConnected()) { Alert.alert('未连接打印机', '请先到「打印」页连接打印机后再打印'); return; }
     if (!labelConfig) { Alert.alert('提示', '请先在设置页配置标签模板后再打印'); return; }
+    setPrintTarget(item);
+    setPrintQty(1);
+  };
+
+  const handlePrintItem = async (item: Product, qty: number) => {
+    setPrintTarget(null);
     setPrintingId(item.id);
-    const ok = await printLabel({
-      name: item.name, code: item.code, category: item.category,
-      color: '', size: '', retailPrice: item.retailPrice, purchasePrice: item.purchasePrice,
-    }, labelConfig);
+    let success = 0;
+    for (let i = 0; i < qty; i++) {
+      const ok = await printLabel({
+        name: item.name, code: item.code, category: item.category,
+        color: '', size: '', retailPrice: item.retailPrice, purchasePrice: item.purchasePrice,
+      }, labelConfig);
+      if (ok) success++;
+      if (i < qty - 1) await new Promise((r) => setTimeout(r, 200));
+    }
     setPrintingId(null);
-    if (ok) Alert.alert('成功', `已打印: ${item.name}`);
-    else Alert.alert('失败', '打印失败，请检查打印机');
+    if (success === qty) Alert.alert('成功', `已打印 ${qty} 张: ${item.name}`);
+    else Alert.alert('完成', `打印 ${success}/${qty} 张: ${item.name}`);
   };
 
   const renderItem = ({ item }: { item: Product }) => (
@@ -131,12 +153,17 @@ let savedUri = formImageUri;
         <View style={styles.cardActions}>
           <TouchableOpacity
             style={[styles.printBtn, { backgroundColor: tc.primary }]}
-            onPress={() => handlePrintItem(item)}
+            onPress={() => openPrintSheet(item)}
             disabled={printingId === item.id}
+            hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
           >
             {printingId === item.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.printBtnText}>打印</Text>}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id, item.name)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            style={[styles.deleteBtn, { backgroundColor: tc.border }]}
+            onPress={() => handleDelete(item.id, item.name)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Text style={[styles.deleteBtnText, { color: tc.subText }]}>×</Text>
           </TouchableOpacity>
         </View>
@@ -152,29 +179,87 @@ let savedUri = formImageUri;
         {search.length > 0 && <TouchableOpacity onPress={() => setSearch('')}><Text style={{ color: tc.subText, fontSize: 16 }}>✕</Text></TouchableOpacity>}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catRow}>
-        {categories.map((c) => (
-          <TouchableOpacity key={c} style={[styles.catBtn, catFilter === c && { backgroundColor: tc.primary, borderColor: tc.primary }]} onPress={() => setCatFilter(c)}>
-            <Text style={[styles.catBtnText, { color: catFilter === c ? '#fff' : tc.subText }]}>{c === 'all' ? '全部' : c}</Text>
-          </TouchableOpacity>
-        ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catRow} contentContainerStyle={{ gap: 6 }}>
+        {categories.map((c) => {
+          const active = catFilter === c;
+          return (
+            <TouchableOpacity
+              key={c}
+              style={[styles.catBtn, { borderColor: active ? tc.primary : tc.border, backgroundColor: active ? tc.primary : tc.card }]}
+              onPress={() => setCatFilter(c)}
+            >
+              <Text style={[styles.catBtnText, { color: active ? '#fff' : tc.subText }]}>{c === 'all' ? '全部' : c}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
-      <View style={styles.sortRow}>
-        {([['name', '名称'], ['code', '款号'], ['price', '价格↓'], ['stock', '库存↑'], ['time', '最新']] as const).map(([key, label]) => (
-          <TouchableOpacity key={key} style={[styles.sortBtn, sortBy === key && { backgroundColor: tc.primary, borderColor: tc.primary }]} onPress={() => setSortBy(key)}>
-            <Text style={[styles.sortBtnText, { color: sortBy === key ? '#fff' : tc.subText }]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortRow} contentContainerStyle={{ gap: 6 }}>
+        {SORT_OPTIONS.map(([key, label]) => {
+          const active = sortBy === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.sortBtn, { borderColor: active ? tc.primary : tc.border, backgroundColor: active ? tc.primaryLight : tc.card }]}
+              onPress={() => setSortBy(key)}
+            >
+              <Text style={[styles.sortBtnText, { color: active ? tc.primary : tc.subText }]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-      <Text style={[styles.countText, { color: tc.subText }]}>共 {filtered.length} 款商品</Text>
+      <Text style={[styles.countText, { color: tc.subText }]}>
+        {filtered.length === products.length ? `共 ${products.length} 款商品` : `筛选出 ${filtered.length} / ${products.length} 款`}
+      </Text>
 
       <FlatList data={filtered} keyExtractor={(i) => i.id} renderItem={renderItem} contentContainerStyle={[styles.list, { paddingBottom: 80 }]} />
 
       <TouchableOpacity style={[styles.fab, { backgroundColor: tc.primary }]} onPress={openAdd}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      {/* 打印数量选择 */}
+      <Modal visible={!!printTarget} transparent animationType="fade" onRequestClose={() => setPrintTarget(null)}>
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setPrintTarget(null)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.sheetCard, { backgroundColor: tc.card }]} onPress={() => {}}>
+            <Text style={[styles.sheetTitle, { color: tc.text }]}>打印吊牌</Text>
+            <Text style={[styles.sheetSub, { color: tc.subText }]} numberOfLines={1}>{printTarget?.name}</Text>
+
+            <View style={styles.sheetQtyRow}>
+              <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => setPrintQty((q) => Math.max(1, q - 1))}>
+                <Text style={[styles.sheetQtyBtnText, { color: tc.text }]}>−</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetQtyNum, { color: tc.text }]}>{printQty}</Text>
+              <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => setPrintQty((q) => Math.min(99, q + 1))}>
+                <Text style={[styles.sheetQtyBtnText, { color: tc.text }]}>+</Text>
+              </TouchableOpacity>
+              <Text style={[styles.sheetQtyUnit, { color: tc.subText }]}>张</Text>
+            </View>
+
+            <View style={styles.sheetPresets}>
+              {QTY_PRESETS.map((n) => (
+                <TouchableOpacity
+                  key={n}
+                  style={[styles.sheetPreset, { borderColor: printQty === n ? tc.primary : tc.border, backgroundColor: printQty === n ? tc.primaryLight : 'transparent' }]}
+                  onPress={() => setPrintQty(n)}
+                >
+                  <Text style={[styles.sheetPresetText, { color: printQty === n ? tc.primary : tc.subText }]}>{n}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.sheetBtns}>
+              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.border }]} onPress={() => setPrintTarget(null)}>
+                <Text style={{ color: tc.text }}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.primary }]} onPress={() => printTarget && handlePrintItem(printTarget, printQty)}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>打印 {printQty} 张</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -244,12 +329,12 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   searchRow: { flexDirection: 'row', alignItems: 'center', margin: 12, marginBottom: 6, paddingHorizontal: 12, padding: 8, borderRadius: 10, borderWidth: 1 },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 14, padding: 4 },
-  catRow: { paddingHorizontal: 12, marginBottom: 4 },
-  catBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: '#fff', marginRight: 6, borderWidth: 1, borderColor: '#E8E8E8' },
+  catRow: { paddingHorizontal: 12, marginBottom: 8, flexGrow: 0 },
+  catBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
   catBtnText: { fontSize: 12, fontWeight: '500' },
-  sortRow: { flexDirection: 'row', paddingHorizontal: 12, marginBottom: 2, gap: 4 },
-  sortBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E8E8E8' },
-  sortBtnText: { fontSize: 11 },
+  sortRow: { paddingHorizontal: 12, marginBottom: 6, flexGrow: 0 },
+  sortBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+  sortBtnText: { fontSize: 12, fontWeight: '500' },
   countText: { fontSize: 11, paddingHorizontal: 12, marginBottom: 4 },
   list: { padding: 12, paddingTop: 4 },
   card: { borderRadius: 12, padding: 12, marginBottom: 10, elevation: 1 },
@@ -266,10 +351,10 @@ const styles = StyleSheet.create({
   cardPrice: { fontSize: 15, fontWeight: 'bold' },
   cardCost: { fontSize: 12 },
   cardStock: { fontSize: 12 },
-  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  printBtn: { borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6, minWidth: 48, alignItems: 'center' },
+  cardActions: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, marginLeft: 4 },
+  printBtn: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, minWidth: 48, alignItems: 'center' },
   printBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  deleteBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
+  deleteBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   deleteBtnText: { fontSize: 16, fontWeight: '600', lineHeight: 18 },
   fab: { position: 'absolute', bottom: 24, right: 20, width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', elevation: 6 },
   fabText: { fontSize: 26, color: '#fff', lineHeight: 28 },
@@ -292,4 +377,18 @@ const styles = StyleSheet.create({
   btnConfirm: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center' },
   imageModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   fullImage: { width: SCREEN_W, height: SCREEN_W },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  sheetCard: { width: '100%', borderRadius: 16, padding: 20 },
+  sheetTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  sheetSub: { fontSize: 13, textAlign: 'center', marginTop: 4, marginBottom: 16 },
+  sheetQtyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
+  sheetQtyBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  sheetQtyBtnText: { fontSize: 22, fontWeight: '600', lineHeight: 24 },
+  sheetQtyNum: { fontSize: 26, fontWeight: '700', minWidth: 44, textAlign: 'center' },
+  sheetQtyUnit: { fontSize: 14, marginLeft: -6 },
+  sheetPresets: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 16, marginBottom: 18 },
+  sheetPreset: { width: 40, height: 34, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  sheetPresetText: { fontSize: 13, fontWeight: '600' },
+  sheetBtns: { flexDirection: 'row', gap: 10 },
+  sheetBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
 });
