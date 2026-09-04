@@ -7,7 +7,10 @@ import { localDateKey, genId } from '../utils/format';
 import { logError } from '../utils/logger';
 
 function saveData(state: any) {
-  try { AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { logError('STORE', `AsyncStorage write failed: ${e}`); }
+  try { 
+    const dataToSave = { ...state, _version: (state._version || 0) + 1 };
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave)); 
+  } catch (e) { logError('STORE', `AsyncStorage write failed: ${e}`); }
 }
 
 export type ThemeColors = {
@@ -54,6 +57,7 @@ interface AppStore {
   currentTemplateId: string | null;
   markupPercent: number;
   storeInfo: StoreInfo;
+  _version: number;
 
   loadData: () => Promise<void>;
   addProduct: (product: Product) => void;
@@ -64,6 +68,7 @@ interface AppStore {
   updateCustomer: (id: string, data: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
   addOrder: (order: Order) => void;
+  updateOrderStatus: (id: string, status: 'completed' | 'cancelled' | 'returned') => void;
   deleteOrder: (id: string) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setLabelConfig: (config: LabelConfig) => void;
@@ -100,12 +105,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
   currentTemplateId: 'builtin_40x30',
   markupPercent: 0,
   storeInfo: { name: '金豆库管', phone: '', address: '' },
+  _version: 0,
 
   loadData: async () => {
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEY);
       if (saved) {
         const data = JSON.parse(saved);
+        const currentState = get();
+        
+        // 检查版本号，避免覆盖更新的数据
+        if (data._version && currentState._version && data._version < currentState._version) {
+          set({ isLoading: false });
+          return;
+        }
+        
         let userTemplates: LabelTemplate[] = [];
         if (Array.isArray(data.labelTemplates) && data.labelTemplates.length > 0) {
           userTemplates = data.labelTemplates.map((t: any) => ({
@@ -134,6 +148,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           markupPercent: typeof data.markupPercent === 'number' ? data.markupPercent : 0,
           storeInfo: { name: '金豆库管', phone: '', address: '', ...(data.storeInfo || {}) },
           isLoading: false,
+          _version: data._version || 0,
         });
       } else {
         set({
@@ -143,6 +158,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           currentTemplateId: 'builtin_40x30',
           labelConfig: BUILTIN_TEMPLATES[0].config,
           isLoading: false,
+          _version: 0,
         });
       }
     } catch {
@@ -153,6 +169,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: 'builtin_40x30',
         labelConfig: BUILTIN_TEMPLATES[0].config,
         isLoading: false,
+        _version: 0,
       });
     }
   },
@@ -256,17 +273,47 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
   },
 
-  deleteOrder: (id) => {
+  updateOrderStatus: (id, status) => {
     set((s) => {
       const target = s.orders.find((o) => o.id === id);
+      if (!target) return {};
+      
+      // 如果是取消/退货状态，且原状态是completed，则回滚库存和积分
+      let products = s.products;
       let customers = s.customers;
-      if (target && target.customerId && target.status === 'completed') {
-        const points = Math.floor(target.total / 10);
-        customers = s.customers.map((c) => c.id === target.customerId
-          ? { ...c, totalSpent: Math.max(0, c.totalSpent - target.total), points: Math.max(0, c.points - points) }
-          : c);
+      if (status === 'cancelled' || status === 'returned') {
+        if (target.status === 'completed') {
+          // 回滚库存
+          products = s.products.map(p => {
+            const orderItem = target.items.find(item => item.productId === p.id);
+            if (orderItem) {
+              return { ...p, stock: p.stock + orderItem.qty };
+            }
+            return p;
+          });
+          // 回滚积分和消费
+          if (target.customerId) {
+            const points = Math.floor(target.total / 10);
+            customers = s.customers.map(c => c.id === target.customerId
+              ? { ...c, totalSpent: Math.max(0, c.totalSpent - target.total), points: Math.max(0, c.points - points) }
+              : c);
+          }
+        }
       }
-      const next = { orders: s.orders.filter((o) => o.id !== id), customers };
+      
+      const next = {
+        orders: s.orders.map(o => o.id === id ? { ...o, status } : o),
+        products,
+        customers,
+      };
+      saveData({ ...s, ...next });
+      return next;
+    });
+  },
+
+  deleteOrder: (id) => {
+    set((s) => {
+      const next = { orders: s.orders.filter((o) => o.id !== id) };
       saveData({ ...s, ...next });
       return next;
     });
@@ -363,9 +410,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       stores: [defaultStore],
       currentStoreId: 'store_main',
       theme: 'light',
-      labelConfig: DEFAULT_LABEL_CONFIG,
-      labelTemplates: [{ id: 'default', name: '默认模板', config: DEFAULT_LABEL_CONFIG }],
-      currentTemplateId: 'default',
+      labelConfig: BUILTIN_TEMPLATES[0].config,
+      labelTemplates: BUILTIN_TEMPLATES,
+      currentTemplateId: 'builtin_40x30',
+      _version: 0,
     });
   },
 
