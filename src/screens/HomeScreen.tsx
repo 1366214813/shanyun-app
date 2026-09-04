@@ -36,10 +36,12 @@ export default function HomeScreen() {
   const stats = getTodayStats();
   const trend = getWeekTrend();
   const storeProducts = products.filter(p => !p.storeId || p.storeId === currentStoreId);
+  const storeOrders = orders.filter(o => !o.storeId || o.storeId === currentStoreId);
+  const storeCustomers = customers.filter(c => !c.storeId || c.storeId === currentStoreId);
   const lowStock = storeProducts.filter((p) => p.stock <= p.warningStock);
   const totalStock = storeProducts.reduce((s, p) => s + (p.stock ?? 0), 0);
-  const recentOrders = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
-  const topCustomers = [...customers].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 5);
+  const recentOrders = [...storeOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+  const topCustomers = [...storeCustomers].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 5);
 
   const chartData = {
     labels: trend.map((t) => t.date),
@@ -92,18 +94,18 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <TouchableOpacity style={[styles.statCard, { backgroundColor: tc.primary }]} onPress={() => navigation.navigate('订单记录')}>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: tc.primary }]} onPress={() => navigation.navigate('订单记录', { onlyToday: true })}>
           <Text style={styles.statLabel}>今日销售</Text>
           <Text style={styles.statValue}>¥{formatMoney(stats.sales)}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#00B894' }]} onPress={() => navigation.navigate('订单记录')}>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#00B894' }]} onPress={() => navigation.navigate('订单记录', { onlyToday: true })}>
           <Text style={styles.statLabel}>今日利润</Text>
           <Text style={styles.statValue}>¥{formatMoney(stats.profit)}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.statsRow}>
-        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#FDCB6E' }]} onPress={() => navigation.navigate('订单记录')}>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#FDCB6E' }]} onPress={() => navigation.navigate('订单记录', { onlyToday: true })}>
           <Text style={[styles.statLabel, { color: '#333' }]}>订单数</Text>
           <Text style={[styles.statValue, { color: '#333' }]}>{stats.orderCount} 单</Text>
         </TouchableOpacity>
@@ -145,15 +147,15 @@ export default function HomeScreen() {
         <Text style={[styles.sectionTitle, { color: tc.text }]}>概览</Text>
         <View style={[styles.infoRow, { borderBottomColor: tc.border }]}>
           <Text style={[styles.infoLabel, { color: tc.subText }]}>商品数</Text>
-          <Text style={[styles.infoValue, { color: tc.text }]}>{products.length} 款</Text>
+          <Text style={[styles.infoValue, { color: tc.text }]}>{storeProducts.length} 款</Text>
         </View>
         <View style={[styles.infoRow, { borderBottomColor: tc.border }]}>
           <Text style={[styles.infoLabel, { color: tc.subText }]}>客户数</Text>
-          <Text style={[styles.infoValue, { color: tc.text }]}>{customers.length} 人</Text>
+          <Text style={[styles.infoValue, { color: tc.text }]}>{storeCustomers.length} 人</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={[styles.infoLabel, { color: tc.subText }]}>总订单</Text>
-          <Text style={[styles.infoValue, { color: tc.text }]}>{orders.length} 笔</Text>
+          <Text style={[styles.infoValue, { color: tc.text }]}>{storeOrders.length} 笔</Text>
         </View>
       </View>
 
