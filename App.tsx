@@ -12,6 +12,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProductsScreen from './src/screens/ProductsScreen';
 import CustomersScreen from './src/screens/CustomersScreen';
 import NewOrderScreen from './src/screens/NewOrderScreen';
+import OrdersScreen from './src/screens/OrdersScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import OcrScreen from './src/screens/OcrScreen';
 import PrintScreen from './src/screens/PrintScreen';
@@ -79,6 +80,7 @@ export default function App() {
           <Stack.Screen name="商品" component={ProductsScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
           <Stack.Screen name="客户" component={CustomersScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
           <Stack.Screen name="开单" component={NewOrderScreen} options={{ headerTitle: '销售开单', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
+          <Stack.Screen name="订单记录" component={OrdersScreen} options={{ headerTitle: '订单记录', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
           <Stack.Screen name="蓝牙调试" component={MinimalBleScreen} options={{ headerTitle: '蓝牙调试', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
           <Stack.Screen name="标签编辑" component={LabelEditorScreen} options={{ headerTitle: '标签编辑', headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
         </Stack.Navigator>
