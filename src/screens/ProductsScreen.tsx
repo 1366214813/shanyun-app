@@ -50,7 +50,7 @@ export default function ProductsScreen() {
   useEffect(() => { loadData(); }, []);
 
   const filtered = useMemo(() => products
-    .filter((p) => p.storeId === currentStoreId)
+    .filter((p) => !p.storeId || p.storeId === currentStoreId)
     .filter((p) => !search || p.name.includes(search) || p.code.includes(search))
     .filter((p) => catFilter === 'all' || p.category === catFilter)
     .sort((a, b) => {
@@ -65,8 +65,8 @@ export default function ProductsScreen() {
     }), [products, currentStoreId, search, catFilter, sortBy]);
 
   const categories = useMemo(
-    () => ['all', ...new Set(products.map((p) => p.category).filter(Boolean))],
-    [products],
+    () => ['all', ...new Set(products.filter(p => !p.storeId || p.storeId === currentStoreId).map((p) => p.category).filter(Boolean))],
+    [products, currentStoreId],
   );
 
   const openAdd = () => { setEditing(null); setFormName(''); setFormCode(genBarcode()); setFormCategory('上衣'); setFormRetailPrice(''); setFormPurchasePrice(''); setFormStock(''); setFormWarningStock('10'); setFormImageUri(''); setModalVisible(true); };
@@ -210,7 +210,9 @@ let savedUri = formImageUri;
       </ScrollView>
 
       <Text style={[styles.countText, { color: tc.subText }]}>
-        {filtered.length === products.length ? `共 ${products.length} 款商品` : `筛选出 ${filtered.length} / ${products.length} 款`}
+        {filtered.length === products.filter(p => !p.storeId || p.storeId === currentStoreId).length 
+          ? `共 ${products.filter(p => !p.storeId || p.storeId === currentStoreId).length} 款商品` 
+          : `筛选出 ${filtered.length} / ${products.filter(p => !p.storeId || p.storeId === currentStoreId).length} 款`}
       </Text>
 
       <FlatList data={filtered} keyExtractor={(i) => i.id} renderItem={renderItem} contentContainerStyle={[styles.list, { paddingBottom: 80 }]} />
