@@ -61,19 +61,23 @@ export default function NewOrderScreen() {
     }
     
     setIsSubmitting(true);
-    const order = {
-      id: genId('o'), storeId: currentStoreId,
-      customerId: selectedCustomer?.id || '', customerName: selectedCustomer?.name || '散客',
-      items, total, cost: items.reduce((s, i) => s + i.purchasePrice * i.qty, 0),
-      profit: total - items.reduce((s, i) => s + i.purchasePrice * i.qty, 0),
-      status: 'completed' as const, payMethod,
-      date: localDateKey(),
-      createdAt: new Date().toISOString(),
-    };
-    items.forEach((item) => { const p = products.find((x) => x.id === item.productId); if (p) updateProduct(p.id, { stock: p.stock - item.qty }); });
-    addOrder(order);
+    try {
+      const order = {
+        id: genId('o'), storeId: currentStoreId,
+        customerId: selectedCustomer?.id || '', customerName: selectedCustomer?.name || '散客',
+        items, total, cost: items.reduce((s, i) => s + i.purchasePrice * i.qty, 0),
+        profit: total - items.reduce((s, i) => s + i.purchasePrice * i.qty, 0),
+        status: 'completed' as const, payMethod,
+        date: localDateKey(),
+        createdAt: new Date().toISOString(),
+      };
+      items.forEach((item) => { const p = products.find((x) => x.id === item.productId); if (p) updateProduct(p.id, { stock: p.stock - item.qty }); });
+      addOrder(order);
+    } finally {
+      setIsSubmitting(false);
+    }
     Alert.alert('成功', `订单已创建 ¥${formatMoney(total)}`, [
-      { text: '确定', onPress: () => { setItems([]); setSelectedCustomer(null); setOrdersVisible(true); setIsSubmitting(false); } },
+      { text: '确定', onPress: () => { setItems([]); setSelectedCustomer(null); setOrdersVisible(true); } },
     ]);
   };
 
