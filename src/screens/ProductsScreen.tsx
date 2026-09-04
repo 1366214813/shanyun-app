@@ -277,6 +277,7 @@ let savedUri = formImageUri;
                 maxLength={4}
                 selectTextOnFocus
                 style={[styles.sheetQtyInput, { color: tc.text, borderColor: tc.border }]}
+                onTouchStart={(e) => e.stopPropagation()}
               />
               <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => { const q = Math.min(999, (parseInt(printQtyText, 10) || 1) + 1); setPrintQtyText(String(q)); }}>
                 <Text style={[styles.sheetQtyBtnText, { color: tc.text }]}>+</Text>
