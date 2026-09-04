@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useAppStore } from '../store/useAppStore';
-import { formatMoney } from '../utils/format';
+import { formatMoney, localDateKey } from '../utils/format';
 import { Order } from '../types';
 
 export default function OrdersScreen({ route }: any) {
@@ -11,7 +11,7 @@ export default function OrdersScreen({ route }: any) {
 
   useEffect(() => { loadData(); }, []);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const filtered = orders
     .filter((o) => !o.storeId || o.storeId === currentStoreId)
     .filter((o) => !onlyToday || o.date === today)
