@@ -491,12 +491,64 @@ export default function OcrScreen() {
     try {
       const { products: existing } = useAppStore.getState();
       const existingCodes = new Set(existing.filter(p => p.storeId === currentStoreId).map(p => p.code));
+      
+      // 检查重复款号
+      const duplicateItems: string[] = [];
+      const newItems: typeof selected = [];
+      
+      for (const item of selected) {
+        const code = item.code.trim();
+        if (code && existingCodes.has(code)) {
+          duplicateItems.push(`${item.name} (${code})`);
+        } else {
+          newItems.push(item);
+        }
+      }
+      
+      // 如果有重复款号，提示用户
+      if (duplicateItems.length > 0) {
+        Alert.alert(
+          '发现重复款号',
+          `以下商品款号已存在：\n${duplicateItems.join('\n')}\n\n将累加库存，而非创建新品。`,
+          [
+            { text: '取消', style: 'cancel' },
+            { 
+              text: '继续入库', 
+              onPress: () => {
+                // 累加重复款号的库存
+                for (const item of selected) {
+                  const code = item.code.trim();
+                  if (code && existingCodes.has(code)) {
+                    const existingProduct = existing.find(p => p.code === code && p.storeId === currentStoreId);
+                    if (existingProduct) {
+                      updateProduct(existingProduct.id, { stock: existingProduct.stock + (Number(item.qty) || 1) });
+                    }
+                  }
+                }
+                // 入库新品
+                if (newItems.length > 0) {
+                  const products = newItems.map(item => {
+                    const purchasePrice = Number(item.purchasePrice) || 0;
+                    const retailPrice = Number(item.retailPrice) || (purchasePrice > 0 && markupPercent > 0 ? Math.round(purchasePrice * (1 + markupPercent / 100)) : 0);
+                    return { id: genId('p'), storeId: currentStoreId, name: item.name.trim(), code: item.code.trim() || genBarcode(), category: item.category.trim() || '未分类', retailPrice, purchasePrice, stock: Number(item.qty) || 1, warningStock: 5, isHot: false, unit: '件', createdAt: new Date().toISOString() };
+                  });
+                  addProducts(products);
+                }
+                Alert.alert('成功', `已累加 ${duplicateItems.length} 件重复商品库存，新增 ${newItems.length} 件商品`);
+                setParsedItems([]);
+                setImageUri(null);
+              }
+            },
+          ]
+        );
+        return;
+      }
+      
+      // 无重复款号，直接入库
       const products = selected.map(item => {
         const purchasePrice = Number(item.purchasePrice) || 0;
         const retailPrice = Number(item.retailPrice) || (purchasePrice > 0 && markupPercent > 0 ? Math.round(purchasePrice * (1 + markupPercent / 100)) : 0);
-        let code = item.code.trim();
-        if (!code || existingCodes.has(code)) code = genBarcode();
-        return { id: genId('p'), storeId: currentStoreId, name: item.name.trim(), code, category: item.category.trim() || '未分类', retailPrice, purchasePrice, stock: Number(item.qty) || 1, warningStock: 5, isHot: false, unit: '件', createdAt: new Date().toISOString() };
+        return { id: genId('p'), storeId: currentStoreId, name: item.name.trim(), code: item.code.trim() || genBarcode(), category: item.category.trim() || '未分类', retailPrice, purchasePrice, stock: Number(item.qty) || 1, warningStock: 5, isHot: false, unit: '件', createdAt: new Date().toISOString() };
       });
       logInfo('OCR', `入库 ${products.length} 件`);
       addProducts(products);
@@ -510,15 +562,23 @@ export default function OcrScreen() {
     <FlatList
       style={[styles.container, { backgroundColor: tc.bg }]}
       data={parsedItems}
-      keyExtractor={(_, i) => String(i)}
+      keyExtractor={(item, i) => item.code || item.name || String(i)}
       ListHeaderComponent={
         <>
           <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: tc.primary }]} onPress={() => pickImage(true)}>
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: tc.primary, opacity: (status === 'running' || status === 'initializing') ? 0.5 : 1 }]} 
+              onPress={() => pickImage(true)}
+              disabled={status === 'running' || status === 'initializing'}
+            >
               <Text style={styles.actionIcon}>📷</Text>
               <Text style={[styles.actionText, { color: '#fff' }]}>拍照入库</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: tc.primaryLight, borderColor: tc.primary }]} onPress={() => pickImage(false)}>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.actionBtnSecondary, { backgroundColor: tc.primaryLight, borderColor: tc.primary, opacity: (status === 'running' || status === 'initializing') ? 0.5 : 1 }]} 
+              onPress={() => pickImage(false)}
+              disabled={status === 'running' || status === 'initializing'}
+            >
               <Text style={[styles.actionIcon, { color: tc.primary }]}>🖼️</Text>
               <Text style={[styles.actionText, { color: tc.primary }]}>相册选择</Text>
             </TouchableOpacity>
