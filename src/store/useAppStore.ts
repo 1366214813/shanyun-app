@@ -22,6 +22,11 @@ function saveData(state: any) {
   return v;
 }
 
+function commit(s: any, next: any) {
+  const v = saveData({ ...s, ...next });
+  return { ...next, _version: v };
+}
+
 export type ThemeColors = {
   bg: string; card: string; text: string; subText: string; border: string;
   primary: string; primaryLight: string; danger: string; headerBg: string;
@@ -198,8 +203,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         nextProducts = [...s.products, product];
       }
       const next = { products: nextProducts };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -221,48 +225,42 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       }
       const next = { products: existing };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   updateProduct: (id, data) => {
     set((s) => {
       const next = { products: s.products.map((p) => (p.id === id ? { ...p, ...data } : p)) };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   deleteProduct: (id) => {
     set((s) => {
       const next = { products: s.products.filter((p) => p.id !== id) };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   addCustomer: (customer) => {
     set((s) => {
       const next = { customers: [...s.customers, customer] };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   updateCustomer: (id, data) => {
     set((s) => {
       const next = { customers: s.customers.map((c) => (c.id === id ? { ...c, ...data } : c)) };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   deleteCustomer: (id) => {
     set((s) => {
       const next = { customers: s.customers.filter((c) => c.id !== id) };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -277,8 +275,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           : c);
       }
       const full = { ...next, customers };
-      saveData({ ...s, ...full });
-      return full;
+      return commit(s, full);
     });
   },
 
@@ -315,8 +312,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         products,
         customers,
       };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -339,14 +335,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       }
       const next = { orders: s.orders.filter((o) => o.id !== id), products, customers };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   setTheme: (theme) => {
-    set({ theme });
-    saveData({ ...get(), theme });
+    set((s) => commit(s, { theme }));
   },
 
   setLabelConfig: (labelConfig) => {
@@ -355,8 +349,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ? s.labelTemplates.map(t => t.id === s.currentTemplateId ? { ...t, config: labelConfig } : t)
         : s.labelTemplates;
       const next = { labelConfig, labelTemplates: templates };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -371,8 +364,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: id,
         labelConfig: config,
       };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -384,8 +376,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: id,
         labelConfig: config,
       };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
     return id;
   },
@@ -400,8 +391,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         currentTemplateId: s.currentTemplateId === id ? fallback.id : s.currentTemplateId,
         labelConfig: s.currentTemplateId === id ? fallback.config : s.labelConfig,
       };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -410,21 +400,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const t = s.labelTemplates.find(t => t.id === id);
       if (!t) return {};
       const next = { currentTemplateId: id, labelConfig: t.config };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   setMarkupPercent: (markupPercent) => {
-    set({ markupPercent });
-    saveData({ ...get(), markupPercent });
+    set((s) => commit(s, { markupPercent }));
   },
 
   setStoreInfo: (info) => {
     set((s) => {
       const next = { storeInfo: { ...s.storeInfo, ...info } };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
@@ -454,15 +441,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ? [...s.orders, ...data.orders.map(o => ({ ...o, id: o.id || genId('o') }))]
         : s.orders;
       const next = { products: nextProducts, customers: nextCustomers, orders: nextOrders };
-      saveData({ ...s, ...next });
-      return next;
+      return commit(s, next);
     });
   },
 
   getTodayStats: () => {
-    const { orders } = get();
+    const { orders, currentStoreId } = get();
     const today = localDateKey();
-    const todayOrders = orders.filter((o) => o.date === today && o.status === 'completed');
+    const todayOrders = orders.filter(
+      (o) => o.date === today
+          && o.status === 'completed'
+          && (!o.storeId || o.storeId === currentStoreId)
+    );
     return {
       sales: todayOrders.reduce((s, o) => s + o.total, 0),
       profit: todayOrders.reduce((s, o) => s + o.profit, 0),
@@ -471,13 +461,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   getWeekTrend: () => {
-    const { orders } = get();
+    const { orders, currentStoreId } = get();
     const result = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const ds = localDateKey(d);
-      const dayOrders = orders.filter((o) => o.date === ds && o.status === 'completed');
+      const dayOrders = orders.filter(
+        (o) => o.date === ds
+            && o.status === 'completed'
+            && (!o.storeId || o.storeId === currentStoreId)
+      );
       result.push({
         date: `${d.getMonth() + 1}/${d.getDate()}`,
         sales: dayOrders.reduce((s, o) => s + o.total, 0),
