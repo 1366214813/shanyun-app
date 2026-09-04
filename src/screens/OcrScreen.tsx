@@ -527,7 +527,7 @@ export default function OcrScreen() {
                 // 再逐个用「当前最新」的库存值累加
                 for (const [code, qty] of qtyByCode) {
                   const latest = useAppStore.getState().products
-                    .find(p => p.code === code && (p.storeId === currentStoreId || !p.storeId));
+                    .find(p => p.code === code && p.storeId === currentStoreId);
                   if (latest) updateProduct(latest.id, { stock: latest.stock + qty });
                 }
                 // 入库新品
