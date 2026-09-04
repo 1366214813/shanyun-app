@@ -3,6 +3,17 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logInfo, logError } from '../utils/logger';
 import { renderLabelBitmap, buildCPCLLabel, buildESCPOLILabel } from './LabelRenderer';
+
+// 打印忙标志
+let printing = false;
+
+export function isPrinting() {
+  return printing;
+}
+
+function setPrinting(value: boolean) {
+  printing = value;
+}
 import {
   listBondedDevices as sppListBonded,
   sppConnect,
@@ -351,6 +362,11 @@ function toBase64(arr: Uint8Array): string {
 }
 
 export async function checkConnection(): Promise<boolean> {
+  // 打印忙时跳过检查
+  if (printing) {
+    return true;
+  }
+  
   if (sppAddress !== null) {
     const ok = await sppIsConnected();
     if (!ok) {
@@ -384,6 +400,12 @@ export async function checkConnection(): Promise<boolean> {
 }
 
 export async function queryBattery(): Promise<BatteryInfo | null> {
+  // 打印忙时让路
+  if (printing) {
+    logInfo('PRINTER', '打印忙，跳过电量查询');
+    return null;
+  }
+  
   if (sppAddress !== null) {
     logInfo('PRINTER', 'SPP 模式暂不支持电量查询');
     return null;
@@ -543,56 +565,67 @@ export function destroyManager() {
 }
 
 export async function printLabel(data: LabelData, config?: LabelConfig): Promise<boolean> {
+  // 防止并发打印
+  if (printing) {
+    logError('PRINTER', '打印忙，请稍后再试');
+    return false;
+  }
+  
+  setPrinting(true);
   const cfg = config || DEFAULT_LABEL_CONFIG;
 
-  // SPP 通道（经典蓝牙）：HM-T260LR 双模，官方 App 走 SPP，用 ESC/POS GS v 0 位图
-  if (sppAddress !== null) {
+  try {
+    // SPP 通道（经典蓝牙）：HM-T260LR 双模，官方 App 走 SPP，用 ESC/POS GS v 0 位图
+    if (sppAddress !== null) {
+      try {
+        logInfo('PRINTER', 'SPP 打印: 渲染 ESC_POLI 位图...');
+        const bitmap = await renderLabelBitmap(data, cfg);
+        if (!bitmap) {
+          logError('PRINTER', '标签渲染失败 (skia surface 创建失败)');
+          return false;
+        }
+        const cmd = buildESCPOLILabel(bitmap);
+        logInfo('PRINTER', `SPP 发送 ESC/POS 指令 (${cmd.length} bytes, 位图 ${bitmap.widthPx}x${bitmap.heightPx})...`);
+        await writeSppChunks(cmd);
+        sppWriteUsed = true;
+        logInfo('PRINTER', 'SPP 打印完成');
+        return true;
+      } catch (err) {
+        logError('PRINTER', `SPP 打印失败: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      }
+    }
+
+    if (!writeChar) {
+      // 尝试自动重连（打印完 BLE 可能超时断开）
+      if (lastDevice) {
+        logInfo('PRINTER', 'BLE 未连接，尝试自动重连...');
+        try { await connectToDevice(lastDevice); } catch (_) {}
+      }
+      if (!writeChar) { logError('PRINTER', '未连接打印机'); return false; }
+    }
+
     try {
-      logInfo('PRINTER', 'SPP 打印: 渲染 ESC_POLI 位图...');
       const bitmap = await renderLabelBitmap(data, cfg);
       if (!bitmap) {
         logError('PRINTER', '标签渲染失败 (skia surface 创建失败)');
         return false;
       }
+
+      // BLE 通道也用 ESC/POS 格式（和 SPP 一致），CPCL 在 T260 上不出纸
       const cmd = buildESCPOLILabel(bitmap);
-      logInfo('PRINTER', `SPP 发送 ESC/POS 指令 (${cmd.length} bytes, 位图 ${bitmap.widthPx}x${bitmap.heightPx})...`);
-      await writeSppChunks(cmd);
-      sppWriteUsed = true;
-      logInfo('PRINTER', 'SPP 打印完成');
+      logInfo('PRINTER', `BLE 发送 ESC/POS 指令 (${cmd.length} bytes, 位图 ${bitmap.widthPx}x${bitmap.heightPx})...`);
+
+      await writeChunks(cmd);
+
+      logInfo('PRINTER', 'BLE 打印完成');
       return true;
     } catch (err) {
-      logError('PRINTER', `SPP 打印失败: ${err instanceof Error ? err.message : String(err)}`);
+      logError('PRINTER', `BLE 打印失败: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     }
-  }
-
-  if (!writeChar) {
-    // 尝试自动重连（打印完 BLE 可能超时断开）
-    if (lastDevice) {
-      logInfo('PRINTER', 'BLE 未连接，尝试自动重连...');
-      try { await connectToDevice(lastDevice); } catch (_) {}
-    }
-    if (!writeChar) { logError('PRINTER', '未连接打印机'); return false; }
-  }
-
-  try {
-    const bitmap = await renderLabelBitmap(data, cfg);
-    if (!bitmap) {
-      logError('PRINTER', '标签渲染失败 (skia surface 创建失败)');
-      return false;
-    }
-
-    // BLE 通道也用 ESC/POS 格式（和 SPP 一致），CPCL 在 T260 上不出纸
-    const cmd = buildESCPOLILabel(bitmap);
-    logInfo('PRINTER', `BLE 发送 ESC/POS 指令 (${cmd.length} bytes, 位图 ${bitmap.widthPx}x${bitmap.heightPx})...`);
-
-    await writeChunks(cmd);
-
-    logInfo('PRINTER', 'BLE 打印完成');
-    return true;
-  } catch (err) {
-    logError('PRINTER', `BLE 打印失败: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
+  } finally {
+    setPrinting(false);
   }
 }
 
