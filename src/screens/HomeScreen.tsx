@@ -7,6 +7,15 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
+// 统一卡片阴影，避免各页面深浅不一
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
+
 export default function HomeScreen() {
   const { products, customers, orders, isLoading, loadData, getTodayStats, getWeekTrend, theme } = useAppStore();
   const tc = THEMES[theme];
@@ -34,20 +43,25 @@ export default function HomeScreen() {
   const chartData = {
     labels: trend.map((t) => t.date),
     datasets: [
-      { data: trend.map((t) => t.sales || 0), color: () => '#6C5CE7', strokeWidth: 2 },
+      { data: trend.map((t) => t.sales || 0), color: () => tc.primary, strokeWidth: 2 },
       { data: trend.map((t) => t.profit || 0), color: () => '#00B894', strokeWidth: 2 },
     ],
     legend: ['销售额', '利润'],
   };
 
+  // 库存预警配色：深色模式下不能用浅橙底，否则刺眼
+  const alarm = theme === 'dark'
+    ? { bg: '#3A2E22', title: '#FFB74D', item: '#D7BFA3', more: '#FFB74D' }
+    : { bg: '#FFF3E0', title: '#E65100', item: '#BF360C', more: '#E65100' };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: tc.bg }]}>
       <Text style={[styles.date, { color: tc.text }]}>{formatDisplayDate(new Date())}</Text>
 
-      {/* 快捷操作按钮 */}
+      {/* 快捷操作按钮：开单为主操作，占 50% 宽度 */}
       <View style={styles.quickActions}>
         <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: '#6C5CE7' }]}
+          style={[styles.quickBtn, styles.quickBtnMain, { backgroundColor: tc.primary }]}
           onPress={() => navigation.navigate('开单')}
         >
           <Text style={styles.quickBtnIcon}>🧾</Text>
@@ -55,17 +69,17 @@ export default function HomeScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.quickBtn, { backgroundColor: '#00B894' }]}
-          onPress={() => navigation.navigate('客户')}
-        >
-          <Text style={styles.quickBtnIcon}>👥</Text>
-          <Text style={styles.quickBtnText}>客户</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: '#FDCB6E' }]}
           onPress={() => navigation.navigate('商品')}
         >
           <Text style={styles.quickBtnIcon}>👕</Text>
-          <Text style={[styles.quickBtnText, { color: '#333' }]}>商品</Text>
+          <Text style={styles.quickBtnText}>商品</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickBtn, { backgroundColor: '#FDCB6E' }]}
+          onPress={() => navigation.navigate('客户')}
+        >
+          <Text style={styles.quickBtnIcon}>👥</Text>
+          <Text style={[styles.quickBtnText, { color: '#333' }]}>客户</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.quickBtn, { backgroundColor: '#E17055' }]}
@@ -77,7 +91,7 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <TouchableOpacity style={[styles.statCard, { backgroundColor: '#6C5CE7' }]} onPress={() => navigation.navigate('开单')}>
+        <TouchableOpacity style={[styles.statCard, { backgroundColor: tc.primary }]} onPress={() => navigation.navigate('开单')}>
           <Text style={styles.statLabel}>今日销售</Text>
           <Text style={styles.statValue}>¥{formatMoney(stats.sales)}</Text>
         </TouchableOpacity>
@@ -106,13 +120,13 @@ export default function HomeScreen() {
             width={screenWidth - 48}
             height={200}
             chartConfig={{
-              backgroundColor: '#fff',
-              backgroundGradientFrom: '#fff',
-              backgroundGradientTo: '#fff',
+              backgroundColor: tc.card,
+              backgroundGradientFrom: tc.card,
+              backgroundGradientTo: tc.card,
               decimalPlaces: 0,
               color: (opacity = 1) => `rgba(108, 92, 231, ${opacity})`,
-              labelColor: () => '#999',
-              propsForDots: { r: '4', strokeWidth: '2', stroke: '#6C5CE7' },
+              labelColor: () => tc.subText,
+              propsForDots: { r: '4', strokeWidth: '2', stroke: tc.primary },
             }}
             bezier
             style={styles.chart}
@@ -192,17 +206,24 @@ export default function HomeScreen() {
 
       {/* 库存预警 */}
       {lowStock.length > 0 && (
-        <View style={styles.alertCard}>
-          <Text style={styles.alertTitle}>库存预警 ({lowStock.length})</Text>
+        <TouchableOpacity
+          style={[styles.alertCard, { backgroundColor: alarm.bg }]}
+          onPress={() => navigation.navigate('商品')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.cardHeader}>
+            <Text style={[styles.alertTitle, { color: alarm.title }]}>库存预警 ({lowStock.length})</Text>
+            <Text style={{ color: alarm.more, fontSize: 13 }}>去补货 →</Text>
+          </View>
           {lowStock.slice(0, 5).map((p) => (
-            <Text key={p.id} style={styles.alertItem}>
+            <Text key={p.id} style={[styles.alertItem, { color: alarm.item }]}>
               {p.name} - 仅剩 {p.stock} {p.unit}
             </Text>
           ))}
           {lowStock.length > 5 && (
-            <Text style={styles.alertMore}>还有 {lowStock.length - 5} 项...</Text>
+            <Text style={[styles.alertMore, { color: alarm.more }]}>还有 {lowStock.length - 5} 项...</Text>
           )}
-        </View>
+        </TouchableOpacity>
       )}
     </ScrollView>
   );
@@ -213,21 +234,22 @@ const styles = StyleSheet.create({
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   date: { fontSize: 14, color: '#666', marginBottom: 16 },
   quickActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  quickBtn: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center', elevation: 2 },
+  quickBtn: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center', ...CARD_SHADOW },
+  quickBtnMain: { flex: 3 },
   quickBtnIcon: { fontSize: 24 },
   quickBtnText: { fontSize: 12, color: '#fff', fontWeight: '600', marginTop: 4 },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  statCard: { flex: 1, padding: 16, borderRadius: 12 },
+  statCard: { flex: 1, padding: 16, borderRadius: 12, ...CARD_SHADOW },
   statLabel: { fontSize: 13, color: '#fff', opacity: 0.8 },
   statValue: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginTop: 4 },
-  chartCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
+  chartCard: { borderRadius: 12, padding: 16, marginBottom: 12, ...CARD_SHADOW },
   chart: { marginTop: 8, borderRadius: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
-  infoCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  infoLabel: { fontSize: 14, color: '#666' },
-  infoValue: { fontSize: 14, fontWeight: '600', color: '#333' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '600' },
+  infoCard: { borderRadius: 12, padding: 16, marginBottom: 12, ...CARD_SHADOW },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1 },
+  infoLabel: { fontSize: 14 },
+  infoValue: { fontSize: 14, fontWeight: '600' },
+  card: { borderRadius: 12, padding: 16, marginBottom: 12, ...CARD_SHADOW },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   orderInfo: { flex: 1 },
@@ -243,8 +265,8 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 14, fontWeight: '500' },
   customerLevel: { fontSize: 11, marginTop: 2 },
   customerSpent: { fontSize: 14, fontWeight: '600' },
-  alertCard: { backgroundColor: '#FFF3E0', borderRadius: 12, padding: 16, marginBottom: 24 },
-  alertTitle: { fontSize: 15, fontWeight: '600', color: '#E65100', marginBottom: 8 },
-  alertItem: { fontSize: 13, color: '#BF360C', paddingVertical: 2 },
-  alertMore: { fontSize: 12, color: '#E65100', marginTop: 4, fontStyle: 'italic' },
+  alertCard: { borderRadius: 12, padding: 16, marginBottom: 24, ...CARD_SHADOW },
+  alertTitle: { fontSize: 15, fontWeight: '600' },
+  alertItem: { fontSize: 13, paddingVertical: 2 },
+  alertMore: { fontSize: 12, marginTop: 4, fontStyle: 'italic' },
 });
