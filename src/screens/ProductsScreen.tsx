@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, Alert, Modal, ScrollView, Image, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useAppStore, THEMES } from '../store/useAppStore';
 import { formatMoney, genId, genBarcode, categoryEmoji } from '../utils/format';
@@ -100,6 +100,9 @@ let savedUri = formImageUri;
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<Product | null>(null);
   const [printQtyText, setPrintQtyText] = useState('1');
+  const printCancelRef = useRef(false);
+  const [printProgress, setPrintProgress] = useState<{ done: number; total: number } | null>(null);
+  const qtyDisplay = printQtyText === '' ? '1' : printQtyText;
 
   const openPrintSheet = (item: Product) => {
     if (!isConnected()) { Alert.alert('未连接打印机', '请先到「打印」页连接打印机后再打印'); return; }
@@ -112,18 +115,43 @@ let savedUri = formImageUri;
     const qty = Math.max(1, Math.min(999, parseInt(qtyStr, 10) || 1));
     setPrintTarget(null);
     setPrintingId(item.id);
+    printCancelRef.current = false;
+    setPrintProgress({ done: 0, total: qty });
+
     let success = 0;
-    for (let i = 0; i < qty; i++) {
-      const ok = await printLabel({
-        name: item.name, code: item.code, category: item.category,
-        color: '', size: '', retailPrice: item.retailPrice, purchasePrice: item.purchasePrice,
-      }, labelConfig);
-      if (ok) success++;
-      if (i < qty - 1) await new Promise((r) => setTimeout(r, 200));
+    let failStreak = 0;
+    try {
+      for (let i = 0; i < qty; i++) {
+        if (printCancelRef.current) break;
+
+        const ok = await printLabel({
+          name: item.name, code: item.code, category: item.category,
+          color: '', size: '', retailPrice: item.retailPrice, purchasePrice: item.purchasePrice,
+        }, labelConfig);
+
+        if (ok) {
+          success++;
+          failStreak = 0;
+        } else {
+          failStreak++;
+          if (failStreak >= 3) break;
+        }
+
+        setPrintProgress({ done: i + 1, total: qty });
+        if (i < qty - 1) await new Promise((r) => setTimeout(r, 200));
+      }
+    } finally {
+      setPrintingId(null);
+      setPrintProgress(null);
     }
-    setPrintingId(null);
-    if (success === qty) Alert.alert('成功', `已打印 ${qty} 张: ${item.name}`);
-    else Alert.alert('完成', `打印 ${success}/${qty} 张: ${item.name}`);
+
+    if (printCancelRef.current) {
+      Alert.alert('已取消', `已打印 ${success}/${qty} 张`);
+    } else if (success === qty) {
+      Alert.alert('成功', `已打印 ${qty} 张: ${item.name}`);
+    } else {
+      Alert.alert('完成', `打印 ${success}/${qty} 张: ${item.name}${failStreak >= 3 ? '\n\n连续 3 张失败，已中止。请检查打印机连接与纸张。' : ''}`);
+    }
   };
 
   const renderItem = ({ item }: { item: Product }) => (
@@ -153,12 +181,20 @@ let savedUri = formImageUri;
         </View>
         <View style={styles.cardActions}>
           <TouchableOpacity
-            style={[styles.printBtn, { backgroundColor: tc.primary }]}
-            onPress={() => openPrintSheet(item)}
-            disabled={printingId === item.id}
+            style={[styles.printBtn, { backgroundColor: printingId === item.id ? '#FF6B6B' : tc.primary }]}
+            onPress={() => {
+              if (printingId === item.id) printCancelRef.current = true;
+              else openPrintSheet(item);
+            }}
             hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
           >
-            {printingId === item.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.printBtnText}>打印</Text>}
+            {printingId === item.id ? (
+              <Text style={styles.printBtnText}>
+                {printProgress ? `${printProgress.done}/${printProgress.total} 取消` : '取消'}
+              </Text>
+            ) : (
+              <Text style={styles.printBtnText}>打印</Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.deleteBtn, { backgroundColor: tc.border }]}
@@ -236,6 +272,7 @@ let savedUri = formImageUri;
               <TextInput
                 value={printQtyText}
                 onChangeText={(t) => setPrintQtyText(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                onBlur={() => { if (!printQtyText) setPrintQtyText('1'); }}
                 keyboardType="number-pad"
                 maxLength={4}
                 selectTextOnFocus
@@ -263,8 +300,8 @@ let savedUri = formImageUri;
               <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.border }]} onPress={() => setPrintTarget(null)}>
                 <Text style={{ color: tc.text }}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.primary }]} onPress={() => printTarget && handlePrintItem(printTarget, printQtyText)}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>打印 {printQtyText} 张</Text>
+              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.primary }]} onPress={() => printTarget && handlePrintItem(printTarget, qtyDisplay)}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>打印 {qtyDisplay} 张</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
