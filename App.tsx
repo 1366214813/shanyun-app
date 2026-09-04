@@ -28,11 +28,12 @@ ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
 });
 
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = { '首页': '🏠', 'OCR': '📸', '打印': '🏷️', '设置': '⚙️' };
+  const tc = THEMES[useAppStore((s) => s.theme)];
+  const icons: Record<string, string> = { 首页: '🏠', OCR: '📸', 打印: '🏷️', 设置: '⚙️' };
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4 }}>
       <Text style={{ fontSize: focused ? 24 : 20, opacity: focused ? 1 : 0.5 }}>{icons[label] || '📄'}</Text>
-      <Text style={{ fontSize: 10, color: focused ? '#6C5CE7' : '#999', fontWeight: focused ? '600' : '400', marginTop: 2 }}>{label}</Text>
+      <Text style={{ fontSize: 10, color: focused ? tc.primary : '#999', fontWeight: focused ? '600' : '400', marginTop: 2 }}>{label}</Text>
     </View>
   );
 }
@@ -71,7 +72,8 @@ export default function App() {
   return (
     <ErrorBoundary>
       <NavigationContainer theme={theme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style={theme === 'dark' ? 'light' : 'light'} />
+        {/* 两种主题的 headerBg 都是深色，状态栏统一用亮色内容 */}
+        <StatusBar style="light" backgroundColor={tc.headerBg} />
         <Stack.Navigator>
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
           <Stack.Screen name="商品" component={ProductsScreen} options={{ headerStyle: { backgroundColor: tc.headerBg }, headerTintColor: '#fff' }} />
