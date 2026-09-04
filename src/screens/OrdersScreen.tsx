@@ -4,21 +4,25 @@ import { useAppStore } from '../store/useAppStore';
 import { formatMoney } from '../utils/format';
 import { Order } from '../types';
 
-export default function OrdersScreen() {
-  const { orders, currentStoreId, isLoading, loadData, deleteOrder } = useAppStore();
-  const [filter, setFilter] = useState<'all' | 'completed' | 'cancelled'>('all');
+export default function OrdersScreen({ route }: any) {
+  const { orders, currentStoreId, isLoading, loadData, deleteOrder, updateOrderStatus } = useAppStore();
+  const [filter, setFilter] = useState<'all' | 'completed' | 'cancelled' | 'returned'>('all');
+  const onlyToday = route?.params?.onlyToday;
 
   useEffect(() => { loadData(); }, []);
 
+  const today = new Date().toISOString().slice(0, 10);
   const filtered = orders
-    .filter((o) => o.storeId === currentStoreId)
+    .filter((o) => !o.storeId || o.storeId === currentStoreId)
+    .filter((o) => !onlyToday || o.date === today)
     .filter((o) => filter === 'all' || o.status === filter)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const handleDelete = (id: string) => {
-    Alert.alert('确认删除', '删除此订单？', [
-      { text: '取消' },
-      { text: '删除', style: 'destructive', onPress: () => deleteOrder(id) },
+  const handleReturn = (id: string) => {
+    Alert.alert('退货 / 取消', '选择操作后库存将自动回滚：', [
+      { text: '取消操作', style: 'cancel' },
+      { text: '标记退货', onPress: () => updateOrderStatus(id, 'returned') },
+      { text: '标记取消', onPress: () => updateOrderStatus(id, 'cancelled') },
     ]);
   };
 
@@ -43,9 +47,11 @@ export default function OrdersScreen() {
       <View style={styles.cardFooter}>
         <Text style={styles.total}>¥{formatMoney(item.total)}</Text>
         <Text style={styles.profit}>利润 ¥{formatMoney(item.profit)}</Text>
-        <TouchableOpacity onPress={() => handleDelete(item.id)}>
-          <Text style={styles.deleteText}>删除</Text>
-        </TouchableOpacity>
+        {item.status === 'completed' && (
+          <TouchableOpacity onPress={() => handleReturn(item.id)}>
+            <Text style={styles.returnText}>退货/取消</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -53,9 +59,9 @@ export default function OrdersScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.filterRow}>
-        {(['all', 'completed', 'cancelled'] as const).map((f) => (
+        {(['all', 'completed', 'cancelled', 'returned'] as const).map((f) => (
           <TouchableOpacity key={f} style={[styles.filterBtn, filter === f && styles.filterBtnActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.filterBtnText, filter === f && styles.filterBtnTextActive]}>{f === 'all' ? '全部' : f === 'completed' ? '已完成' : '已取消'}</Text>
+            <Text style={[styles.filterBtnText, filter === f && styles.filterBtnTextActive]}>{f === 'all' ? '全部' : f === 'completed' ? '已完成' : f === 'cancelled' ? '已取消' : '已退货'}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -83,5 +89,5 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 10, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingTop: 10 },
   total: { fontSize: 16, fontWeight: 'bold', color: '#6C5CE7', flex: 1 },
   profit: { fontSize: 13, color: '#00B894', marginRight: 12 },
-  deleteText: { color: '#FF6B6B', fontSize: 13 },
+  returnText: { color: '#FDCB6E', fontSize: 13 },
 });
