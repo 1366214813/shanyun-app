@@ -99,16 +99,17 @@ let savedUri = formImageUri;
 
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<Product | null>(null);
-  const [printQty, setPrintQty] = useState(1);
+  const [printQtyText, setPrintQtyText] = useState('1');
 
   const openPrintSheet = (item: Product) => {
     if (!isConnected()) { Alert.alert('未连接打印机', '请先到「打印」页连接打印机后再打印'); return; }
     if (!labelConfig) { Alert.alert('提示', '请先在设置页配置标签模板后再打印'); return; }
     setPrintTarget(item);
-    setPrintQty(1);
+    setPrintQtyText('1');
   };
 
-  const handlePrintItem = async (item: Product, qty: number) => {
+  const handlePrintItem = async (item: Product, qtyStr: string) => {
+    const qty = Math.max(1, Math.min(999, parseInt(qtyStr, 10) || 1));
     setPrintTarget(null);
     setPrintingId(item.id);
     let success = 0;
@@ -229,11 +230,18 @@ let savedUri = formImageUri;
             <Text style={[styles.sheetSub, { color: tc.subText }]} numberOfLines={1}>{printTarget?.name}</Text>
 
             <View style={styles.sheetQtyRow}>
-              <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => setPrintQty((q) => Math.max(1, q - 1))}>
+              <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => { const q = Math.max(1, (parseInt(printQtyText, 10) || 1) - 1); setPrintQtyText(String(q)); }}>
                 <Text style={[styles.sheetQtyBtnText, { color: tc.text }]}>−</Text>
               </TouchableOpacity>
-              <Text style={[styles.sheetQtyNum, { color: tc.text }]}>{printQty}</Text>
-              <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => setPrintQty((q) => Math.min(99, q + 1))}>
+              <TextInput
+                value={printQtyText}
+                onChangeText={(t) => setPrintQtyText(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                keyboardType="number-pad"
+                maxLength={4}
+                selectTextOnFocus
+                style={[styles.sheetQtyInput, { color: tc.text, borderColor: tc.border }]}
+              />
+              <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => { const q = Math.min(999, (parseInt(printQtyText, 10) || 1) + 1); setPrintQtyText(String(q)); }}>
                 <Text style={[styles.sheetQtyBtnText, { color: tc.text }]}>+</Text>
               </TouchableOpacity>
               <Text style={[styles.sheetQtyUnit, { color: tc.subText }]}>张</Text>
@@ -243,10 +251,10 @@ let savedUri = formImageUri;
               {QTY_PRESETS.map((n) => (
                 <TouchableOpacity
                   key={n}
-                  style={[styles.sheetPreset, { borderColor: printQty === n ? tc.primary : tc.border, backgroundColor: printQty === n ? tc.primaryLight : 'transparent' }]}
-                  onPress={() => setPrintQty(n)}
+                  style={[styles.sheetPreset, { borderColor: printQtyText === String(n) ? tc.primary : tc.border, backgroundColor: printQtyText === String(n) ? tc.primaryLight : 'transparent' }]}
+                  onPress={() => setPrintQtyText(String(n))}
                 >
-                  <Text style={[styles.sheetPresetText, { color: printQty === n ? tc.primary : tc.subText }]}>{n}</Text>
+                  <Text style={[styles.sheetPresetText, { color: printQtyText === String(n) ? tc.primary : tc.subText }]}>{n}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -255,8 +263,8 @@ let savedUri = formImageUri;
               <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.border }]} onPress={() => setPrintTarget(null)}>
                 <Text style={{ color: tc.text }}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.primary }]} onPress={() => printTarget && handlePrintItem(printTarget, printQty)}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>打印 {printQty} 张</Text>
+              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: tc.primary }]} onPress={() => printTarget && handlePrintItem(printTarget, printQtyText)}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>打印 {printQtyText} 张</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -386,7 +394,7 @@ const styles = StyleSheet.create({
   sheetQtyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
   sheetQtyBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   sheetQtyBtnText: { fontSize: 22, fontWeight: '600', lineHeight: 24 },
-  sheetQtyNum: { fontSize: 26, fontWeight: '700', minWidth: 44, textAlign: 'center' },
+  sheetQtyInput: { fontSize: 26, fontWeight: '700', minWidth: 60, textAlign: 'center', borderWidth: 1, borderRadius: 8, padding: 4 },
   sheetQtyUnit: { fontSize: 14, marginLeft: -6 },
   sheetPresets: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 16, marginBottom: 18 },
   sheetPreset: { width: 40, height: 34, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
