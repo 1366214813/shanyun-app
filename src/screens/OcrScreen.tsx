@@ -12,6 +12,7 @@ import { logError, logInfo } from '../utils/logger';
 import type { RecognitionResult } from 'ppu-paddle-ocr/mobile';
 
 type ParsedItem = {
+  id: string;
   name: string;
   code: string;
   category: string;
@@ -386,7 +387,7 @@ function parseContinuous(text: string): ParsedItem[] {
 function normalizeCode(code: string): string { return code.replace(/[oO]/g, '0'); }
 
 function finalizeItem(raw: Partial<ParsedItem>): ParsedItem {
-  return { name: raw.name || '', code: normalizeCode(raw.code || ''), category: raw.category || '', color: raw.color || '', size: raw.size || '', retailPrice: raw.retailPrice || '', purchasePrice: raw.purchasePrice || '', qty: raw.qty || '1', selected: true };
+  return { id: genId('item'), name: raw.name || '', code: normalizeCode(raw.code || ''), category: raw.category || '', color: raw.color || '', size: raw.size || '', retailPrice: raw.retailPrice || '', purchasePrice: raw.purchasePrice || '', qty: raw.qty || '1', selected: true };
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -515,15 +516,19 @@ export default function OcrScreen() {
             { 
               text: '继续入库', 
               onPress: () => {
-                // 累加重复款号的库存
+                // 先按款号聚合本批数量
+                const qtyByCode = new Map<string, number>();
                 for (const item of selected) {
                   const code = item.code.trim();
                   if (code && existingCodes.has(code)) {
-                    const existingProduct = existing.find(p => p.code === code && p.storeId === currentStoreId);
-                    if (existingProduct) {
-                      updateProduct(existingProduct.id, { stock: existingProduct.stock + (Number(item.qty) || 1) });
-                    }
+                    qtyByCode.set(code, (qtyByCode.get(code) || 0) + (Number(item.qty) || 1));
                   }
+                }
+                // 再逐个用「当前最新」的库存值累加
+                for (const [code, qty] of qtyByCode) {
+                  const latest = useAppStore.getState().products
+                    .find(p => p.code === code && (p.storeId === currentStoreId || !p.storeId));
+                  if (latest) updateProduct(latest.id, { stock: latest.stock + qty });
                 }
                 // 入库新品
                 if (newItems.length > 0) {
@@ -534,7 +539,7 @@ export default function OcrScreen() {
                   });
                   addProducts(products);
                 }
-                Alert.alert('成功', `已累加 ${duplicateItems.length} 件重复商品库存，新增 ${newItems.length} 件商品`);
+                Alert.alert('成功', `已累加 ${qtyByCode.size} 件重复商品库存，新增 ${newItems.length} 件商品`);
                 setParsedItems([]);
                 setImageUri(null);
               }
@@ -562,7 +567,7 @@ export default function OcrScreen() {
     <FlatList
       style={[styles.container, { backgroundColor: tc.bg }]}
       data={parsedItems}
-      keyExtractor={(item, i) => item.code || item.name || String(i)}
+      keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <>
           <View style={styles.actionRow}>
