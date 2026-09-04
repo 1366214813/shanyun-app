@@ -6,11 +6,20 @@ import { LabelConfig, DEFAULT_LABEL_CONFIG, migrateLabelConfig, buildDefaultConf
 import { localDateKey, genId } from '../utils/format';
 import { logError } from '../utils/logger';
 
+// 串行写队列，杜绝并发写
+let writeChain: Promise<void> = Promise.resolve();
+let writeVersion = 0;
+
 function saveData(state: any) {
-  try { 
-    const dataToSave = { ...state, _version: (state._version || 0) + 1 };
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave)); 
-  } catch (e) { logError('STORE', `AsyncStorage write failed: ${e}`); }
+  const v = (state._version || 0) + 1;
+  writeChain = writeChain.then(async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, _version: v }));
+    } catch (e) {
+      logError('STORE', `AsyncStorage write failed: ${e}`);
+    }
+  });
+  return v;
 }
 
 export type ThemeColors = {
@@ -313,7 +322,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   deleteOrder: (id) => {
     set((s) => {
-      const next = { orders: s.orders.filter((o) => o.id !== id) };
+      const target = s.orders.find((o) => o.id === id);
+      let products = s.products;
+      let customers = s.customers;
+      // 兜底回滚：如果订单是completed状态，回滚库存和积分
+      if (target && target.status === 'completed') {
+        products = s.products.map((p) => {
+          const it = target.items.find((i) => i.productId === p.id);
+          return it ? { ...p, stock: p.stock + it.qty } : p;
+        });
+        if (target.customerId) {
+          const points = Math.floor(target.total / 10);
+          customers = s.customers.map((c) => c.id === target.customerId
+            ? { ...c, totalSpent: Math.max(0, c.totalSpent - target.total), points: Math.max(0, c.points - points) }
+            : c);
+        }
+      }
+      const next = { orders: s.orders.filter((o) => o.id !== id), products, customers };
       saveData({ ...s, ...next });
       return next;
     });
