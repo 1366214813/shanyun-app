@@ -45,6 +45,12 @@ function writeLog(entry: Omit<LogEntry, 'id' | 'time'>) {
     buffer.length = MAX_BUFFER_SIZE;
   }
   
+  // error级别立即落盘：App可能马上崩溃，等不到定时器
+  if (entry.level === 'error') {
+    flushBuffer();
+    return;
+  }
+  
   // 如果没有定时器，设置定时器
   if (!flushTimer && !isFlushing) {
     flushTimer = setTimeout(flushBuffer, FLUSH_INTERVAL);
@@ -69,6 +75,10 @@ async function flushBuffer() {
     await AsyncStorage.setItem(LOG_KEY, JSON.stringify(newLogs));
   } catch {} finally {
     isFlushing = false;
+    // 如果flush期间有新日志进入，补一个定时器
+    if (buffer.length > 0 && !flushTimer) {
+      flushTimer = setTimeout(flushBuffer, FLUSH_INTERVAL);
+    }
   }
 }
 
