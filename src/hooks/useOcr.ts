@@ -177,6 +177,8 @@ export function useOcr() {
       clearTimeout(timer);
       if (timedOut) {
         logError('OCR', `识别超时(${timeoutMs / 1000}s)，丢弃迟到结果`);
+        setError(`识别超时(${timeoutMs / 1000}s)`);
+        setStatus("error");
         return;
       }
       const ms = Date.now() - start;
