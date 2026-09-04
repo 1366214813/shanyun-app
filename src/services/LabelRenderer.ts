@@ -117,7 +117,9 @@ export async function renderLabelBitmap(data: LabelData, config: LabelConfig): P
   const { w, h } = LABEL_PRESETS[config.size];
   const widthPx = mmToPx(w);
   const heightPx = mmToPx(h);
-  const widthBytes = Math.ceil(widthPx / 8);
+  // 4字节对齐：热敏打印机要求每行字节数是4的倍数
+  const widthBytesRaw = Math.ceil(widthPx / 8);
+  const widthBytes = Math.ceil(widthBytesRaw / 4) * 4;
 
   const surface = Skia.Surface.Make(widthPx, heightPx);
   if (!surface) return null;
@@ -176,6 +178,7 @@ export async function renderLabelBitmap(data: LabelData, config: LabelConfig): P
   let byteIdx = 0;
   for (let row = 0; row < heightPx; row++) {
     let bit = 0;
+    let bitsInByte = 0;
     for (let col = 0; col < widthPx; col++) {
       const idx = (row * widthPx + col) * 4;
       const r = pixels[idx];
@@ -183,10 +186,22 @@ export async function renderLabelBitmap(data: LabelData, config: LabelConfig): P
       const b = pixels[idx + 2];
       const gray = r * 0.29891 + g * 0.58661 + b * 0.11448;
       if (gray <= 128) bit |= 128 >> (col % 8);
-      if ((col + 1) % 8 === 0 || col === widthPx - 1) {
+      bitsInByte++;
+      if (bitsInByte === 8) {
         mono[byteIdx++] = bit;
         bit = 0;
+        bitsInByte = 0;
       }
+    }
+    // 处理剩余位，并添加padding到4字节边界
+    if (bitsInByte > 0) {
+      mono[byteIdx++] = bit;
+    }
+    // 填充padding字节到4字节边界
+    const currentRowBytes = Math.ceil(widthPx / 8);
+    const paddingBytes = widthBytes - currentRowBytes;
+    for (let i = 0; i < paddingBytes; i++) {
+      mono[byteIdx++] = 0;
     }
   }
 
