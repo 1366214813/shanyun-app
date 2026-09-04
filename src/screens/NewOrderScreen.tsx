@@ -14,8 +14,9 @@ export default function NewOrderScreen() {
   const [search, setSearch] = useState('');
   const [ordersVisible, setOrdersVisible] = useState(false);
   const [showCart, setShowCart] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const storeProducts = products.filter((p) => p.storeId === currentStoreId && p.stock > 0);
+  const storeProducts = products.filter((p) => (!p.storeId || p.storeId === currentStoreId) && p.stock > 0);
   const filtered = search
     ? storeProducts.filter((p) => p.name.includes(search) || p.code.includes(search))
     : storeProducts;
@@ -43,7 +44,23 @@ export default function NewOrderScreen() {
   };
 
   const handleSubmit = () => {
+    if (isSubmitting) return; // 防重
     if (items.length === 0) { Alert.alert('提示', '请添加商品'); return; }
+    
+    // 复检库存
+    const insufficientItems: string[] = [];
+    for (const item of items) {
+      const p = products.find(x => x.id === item.productId);
+      if (!p || p.stock < item.qty) {
+        insufficientItems.push(item.productName);
+      }
+    }
+    if (insufficientItems.length > 0) {
+      Alert.alert('库存不足', `以下商品库存不足：\n${insufficientItems.join('、')}`);
+      return;
+    }
+    
+    setIsSubmitting(true);
     const order = {
       id: genId('o'), storeId: currentStoreId,
       customerId: selectedCustomer?.id || '', customerName: selectedCustomer?.name || '散客',
@@ -56,7 +73,7 @@ export default function NewOrderScreen() {
     items.forEach((item) => { const p = products.find((x) => x.id === item.productId); if (p) updateProduct(p.id, { stock: p.stock - item.qty }); });
     addOrder(order);
     Alert.alert('成功', `订单已创建 ¥${formatMoney(total)}`, [
-      { text: '确定', onPress: () => { setItems([]); setSelectedCustomer(null); setOrdersVisible(true); } },
+      { text: '确定', onPress: () => { setItems([]); setSelectedCustomer(null); setOrdersVisible(true); setIsSubmitting(false); } },
     ]);
   };
 
@@ -83,7 +100,7 @@ export default function NewOrderScreen() {
           <TouchableOpacity style={[styles.custBtn, !selectedCustomer && { backgroundColor: tc.primary }]} onPress={() => setSelectedCustomer(null)}>
             <Text style={[styles.custBtnText, !selectedCustomer && { color: '#fff' }]}>散客</Text>
           </TouchableOpacity>
-          {customers.filter((c) => c.storeId === currentStoreId).map((c) => (
+          {customers.filter((c) => !c.storeId || c.storeId === currentStoreId).map((c) => (
             <TouchableOpacity key={c.id} style={[styles.custBtn, selectedCustomer?.id === c.id && { backgroundColor: tc.primary }]} onPress={() => setSelectedCustomer({ id: c.id, name: c.name })}>
               <Text style={[styles.custBtnText, selectedCustomer?.id === c.id && { color: '#fff' }]}>{c.name}</Text>
             </TouchableOpacity>
@@ -164,8 +181,12 @@ export default function NewOrderScreen() {
               <Text style={[styles.totalLabel, { color: tc.subText }]}>合计</Text>
               <Text style={[styles.totalValue, { color: tc.primary }]}>¥{formatMoney(total)}</Text>
             </View>
-            <TouchableOpacity style={[styles.payBtnSubmit, { backgroundColor: tc.primary }]} onPress={() => { setShowCart(false); handleSubmit(); }}>
-              <Text style={styles.payBtnSubmitText}>确认收款 ¥{formatMoney(total)}</Text>
+            <TouchableOpacity 
+              style={[styles.payBtnSubmit, { backgroundColor: tc.primary, opacity: isSubmitting ? 0.6 : 1 }]} 
+              onPress={() => { setShowCart(false); handleSubmit(); }}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.payBtnSubmitText}>{isSubmitting ? '处理中...' : `确认收款 ¥${formatMoney(total)}`}</Text>
             </TouchableOpacity>
           </View>
         </View>
