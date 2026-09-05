@@ -6,7 +6,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Text, View } from 'react-native';
 import { useAppStore, THEMES } from './src/store/useAppStore';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
-import { logError } from './src/utils/logger';
+import { logError, logInfo } from './src/utils/logger';
+import { autoBackupIfNeeded } from './src/utils/autoBackup';
 
 import HomeScreen from './src/screens/HomeScreen';
 import ProductsScreen from './src/screens/ProductsScreen';
@@ -68,7 +69,18 @@ export default function App() {
   const theme = useAppStore(s => s.theme);
   const tc = THEMES[theme];
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData().then(() => {
+      // 数据加载完成后执行自动备份检查
+      const state = useAppStore.getState();
+      autoBackupIfNeeded(state.products, state.customers, state.orders)
+        .then((result) => {
+          if (result.backedUp && result.fileName) {
+            logInfo('BACKUP', `自动备份完成: ${result.fileName}`);
+          }
+        });
+    });
+  }, []);
 
   return (
     <ErrorBoundary>
