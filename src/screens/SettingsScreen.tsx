@@ -8,6 +8,7 @@ import { getLogs, clearLogs, type LogEntry } from '../utils/logger';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { formatMoney, localDateKey } from '../utils/format';
 import { saveExcelToDownloads } from '../utils/exportData';
+import { isAutoBackupEnabled, setAutoBackupEnabled, autoBackupIfNeeded } from '../utils/autoBackup';
 
 type Tab = 'basic' | 'pricing' | 'data';
 
@@ -32,13 +33,14 @@ export default function SettingsScreen() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logVisible, setLogVisible] = useState(false);
   const [markupInput, setMarkupInput] = useState(String(markupPercent));
+  const [autoBackup, setAutoBackup] = useState(true);
+  const [showLogs, setShowLogs] = useState(false);
   const [editingStore, setEditingStore] = useState(false);
   const [storeName, setStoreName] = useState(storeInfo.name);
   const [storePhone, setStorePhone] = useState(storeInfo.phone);
   const [storeAddr, setStoreAddr] = useState(storeInfo.address);
   const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
   const [clearInput, setClearInput] = useState('');
-  const [showLogs, setShowLogs] = useState(false);
   const lastTapRef = useRef(0);
   const navigation = useNavigation();
 
@@ -54,6 +56,7 @@ export default function SettingsScreen() {
       setStoreName(storeInfo.name);
       setStorePhone(storeInfo.phone);
       setStoreAddr(storeInfo.address);
+      isAutoBackupEnabled().then(setAutoBackup);
     }, [markupPercent, storeInfo])
   );
 
@@ -96,14 +99,16 @@ export default function SettingsScreen() {
 
   const handleExport = async () => {
     try {
-      const rawData = await AsyncStorage.getItem('jindou_data');
-      if (!rawData) { Alert.alert('提示', '暂无数据'); return; }
+      // 使用内存数据而不是AsyncStorage快照
+      if ((!products || products.length === 0) && (!customers || customers.length === 0) && (!orders || orders.length === 0)) {
+        Alert.alert('提示', '暂无数据');
+        return;
+      }
       
-      const data = JSON.parse(rawData);
       const wb = XLSX.utils.book_new();
       
-      if (data.products && data.products.length > 0) {
-        const productData = data.products.map((p: any) => ({
+      if (products && products.length > 0) {
+        const productData = products.map((p: any) => ({
           '商品名称': p.name, '款号': p.code, '分类': p.category,
           '零售价': p.retailPrice, '进货价': p.purchasePrice, '库存': p.stock,
           '预警库存': p.warningStock, '单位': p.unit,
@@ -111,8 +116,8 @@ export default function SettingsScreen() {
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(productData), '商品');
       }
       
-      if (data.customers && data.customers.length > 0) {
-        const customerData = data.customers.map((c: any) => ({
+      if (customers && customers.length > 0) {
+        const customerData = customers.map((c: any) => ({
           '客户姓名': c.name, '电话': c.phone,
           '会员等级': c.level === 'platinum' ? '铂金会员' : c.level === 'gold' ? '黄金会员' : c.level === 'vip' ? 'VIP' : '普通会员',
           '积分': c.points, '余额': c.balance, '累计消费': c.totalSpent, '生日': c.birthday,
@@ -120,8 +125,8 @@ export default function SettingsScreen() {
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customerData), '客户');
       }
       
-      if (data.orders && data.orders.length > 0) {
-        const orderData = data.orders.map((o: any) => ({
+      if (orders && orders.length > 0) {
+        const orderData = orders.map((o: any) => ({
           '订单日期': o.date, '客户': o.customerName,
           '商品明细': o.items.map((i: any) => `${i.productName}×${i.qty}`).join(', '),
           '订单金额': o.total, '成本': o.cost, '利润': o.profit, '支付方式': o.payMethod,
@@ -133,16 +138,11 @@ export default function SettingsScreen() {
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
       const fileName = `金豆库管_${localDateKey()}.xlsx`;
       
-      if (Platform.OS === 'android') {
-        await saveExcelToDownloads(wbout, fileName);
-        Alert.alert('导出成功', `文件已导出：${fileName}`);
-      } else {
-        const { File, Paths } = await import('expo-file-system');
-        const file = new File(Paths.cache, fileName);
-        if (file.exists) file.delete();
-        await file.write(wbout, { encoding: 'base64' });
-        await Share.share({ url: file.uri, title: '金豆库管数据导出' });
-      }
+      const { File, Paths } = await import('expo-file-system');
+      const file = new File(Paths.cache, fileName);
+      if (file.exists) file.delete();
+      await file.write(wbout, { encoding: 'base64' });
+      await Share.share({ url: file.uri, title: '金豆库管数据导出' });
     } catch (e: any) {
       Alert.alert('导出失败', e.message || '未知错误');
     }
@@ -151,17 +151,76 @@ export default function SettingsScreen() {
   const handleImport = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/json',
+        type: ['application/json', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
         copyToCacheDirectory: true,
       });
       
       if (result.canceled || !result.assets?.[0]) return;
       
       const fileUri = result.assets[0].uri;
+      const fileName = result.assets[0].name || fileUri.split('/').pop() || '';
+      const isExcel = /\.(xlsx?|csv)$/i.test(fileName);
+      
       const { File } = await import('expo-file-system');
       const file = new File(fileUri);
-      const jsonStr = await file.text();
-      const data = JSON.parse(jsonStr);
+      
+      let data: any;
+      
+      if (isExcel) {
+        // Excel导入
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        data = { products: [], customers: [], orders: [] };
+        
+        // 解析商品sheet
+        const productSheet = workbook.Sheets['商品'] || workbook.Sheets[workbook.SheetNames[0]];
+        if (productSheet) {
+          const rows = XLSX.utils.sheet_to_json(productSheet);
+          data.products = rows.map((r: any) => ({
+            name: r['商品名称'] || r['name'] || '',
+            code: r['款号'] || r['code'] || '',
+            category: r['分类'] || r['category'] || '未分类',
+            retailPrice: Number(r['零售价'] || r['retailPrice'] || 0),
+            purchasePrice: Number(r['进货价'] || r['purchasePrice'] || 0),
+            stock: Number(r['库存'] || r['stock'] || 0),
+            warningStock: Number(r['预警库存'] || r['warningStock'] || 10),
+            unit: r['单位'] || r['unit'] || '件',
+          }));
+        }
+        
+        // 解析客户sheet
+        const customerSheet = workbook.Sheets['客户'];
+        if (customerSheet) {
+          const rows = XLSX.utils.sheet_to_json(customerSheet);
+          data.customers = rows.map((r: any) => ({
+            name: r['客户姓名'] || r['name'] || '',
+            phone: r['电话'] || r['phone'] || '',
+            points: Number(r['积分'] || r['points'] || 0),
+            balance: Number(r['余额'] || r['balance'] || 0),
+            totalSpent: Number(r['累计消费'] || r['totalSpent'] || 0),
+            birthday: r['生日'] || r['birthday'] || '',
+          }));
+        }
+        
+        // 解析订单sheet
+        const orderSheet = workbook.Sheets['订单'];
+        if (orderSheet) {
+          const rows = XLSX.utils.sheet_to_json(orderSheet);
+          data.orders = rows.map((r: any) => ({
+            date: r['订单日期'] || r['date'] || '',
+            customerName: r['客户'] || r['customerName'] || '散客',
+            total: Number(r['订单金额'] || r['total'] || 0),
+            cost: Number(r['成本'] || r['cost'] || 0),
+            profit: Number(r['利润'] || r['profit'] || 0),
+            payMethod: r['支付方式'] || r['payMethod'] || '现金',
+            status: r['状态'] === '完成' ? 'completed' : r['状态'] === '取消' ? 'cancelled' : 'completed',
+          }));
+        }
+      } else {
+        // JSON导入
+        const jsonStr = await file.text();
+        data = JSON.parse(jsonStr);
+      }
       
       if (!data.products && !data.customers && !data.orders) {
         Alert.alert('格式错误', '文件中未找到有效的商品/客户/订单数据');
@@ -355,10 +414,26 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={[styles.itemBtn, { borderBottomColor: tc.border }]} onPress={handleImport}>
           <View style={styles.logBtnRow}>
-            <Text style={[styles.itemBtnText, { color: tc.primary }]}>导入数据 (JSON)</Text>
+            <Text style={[styles.itemBtnText, { color: tc.primary }]}>导入数据 (JSON/Excel)</Text>
             <Text style={{ color: '#ccc', fontSize: 12 }}>↑</Text>
           </View>
         </TouchableOpacity>
+        <View style={[styles.itemBtn, { borderBottomColor: tc.border }]}>
+          <View style={styles.logBtnRow}>
+            <Text style={[styles.itemBtnText, { color: tc.text }]}>每天自动备份</Text>
+            <Switch
+              value={autoBackup}
+              onValueChange={async (value) => {
+                await setAutoBackupEnabled(value);
+                setAutoBackup(value);
+                showToast(value ? '自动备份已开启' : '自动备份已关闭');
+              }}
+              trackColor={{ false: '#767577', true: tc.primary }}
+              thumbColor={autoBackup ? '#fff' : '#f4f3f4'}
+            />
+          </View>
+          <Text style={{ color: tc.subText, fontSize: 11, marginTop: 2 }}>每天第一次打开时自动备份数据到Documents</Text>
+        </View>
         <TouchableOpacity style={[styles.itemBtn, { borderBottomWidth: 0 }]} onPress={handleReset}>
           <Text style={[styles.itemBtnText, { color: '#FF6B6B' }]}>清空所有数据</Text>
         </TouchableOpacity>
