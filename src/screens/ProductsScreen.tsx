@@ -333,7 +333,18 @@ let savedUri = formImageUri;
               </View>
               <Text style={{ fontSize: 11, color: tc.subText, marginTop: 2 }}>{editing ? '可重新生成条码' : '已自动生成条码，可扫码打印'}</Text>
               <Text style={[styles.label, { color: tc.subText }]}>分类</Text>
-              <TextInput style={[styles.input, { borderColor: tc.border, color: tc.text }]} value={formCategory} onChangeText={setFormCategory} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 6 }} contentContainerStyle={{ gap: 6 }}>
+                {categories.filter(c => c !== 'all').map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.catBtn, { borderColor: formCategory === c ? tc.primary : tc.border, backgroundColor: formCategory === c ? tc.primary : tc.card }]}
+                    onPress={() => setFormCategory(c)}
+                  >
+                    <Text style={[styles.catBtnText, { color: formCategory === c ? '#fff' : tc.subText }]}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TextInput style={[styles.input, { borderColor: tc.border, color: tc.text }]} value={formCategory} onChangeText={setFormCategory} placeholder="或手动输入分类" placeholderTextColor={tc.subText} />
               <View style={styles.priceRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.label, { color: tc.subText }]}>进货价</Text>
@@ -377,10 +388,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   searchRow: { flexDirection: 'row', alignItems: 'center', margin: 12, marginBottom: 6, paddingHorizontal: 12, padding: 8, borderRadius: 10, borderWidth: 1 },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 14, padding: 4 },
-  catRow: { paddingHorizontal: 12, marginBottom: 8, flexGrow: 0 },
+  catRow: { paddingHorizontal: 12, marginBottom: 10, flexGrow: 0 },
   catBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
   catBtnText: { fontSize: 12, fontWeight: '500' },
-  sortRow: { paddingHorizontal: 12, marginBottom: 6, flexGrow: 0 },
+  sortRow: { paddingHorizontal: 12, marginBottom: 8, flexGrow: 0 },
   sortBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
   sortBtnText: { fontSize: 12, fontWeight: '500' },
   countText: { fontSize: 11, paddingHorizontal: 12, marginBottom: 4 },
