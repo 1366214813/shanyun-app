@@ -99,7 +99,6 @@ export default function SettingsScreen() {
 
   const handleExport = async () => {
     try {
-      // 使用内存数据而不是AsyncStorage快照
       if ((!products || products.length === 0) && (!customers || customers.length === 0) && (!orders || orders.length === 0)) {
         Alert.alert('提示', '暂无数据');
         return;
@@ -137,12 +136,7 @@ export default function SettingsScreen() {
       
       const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
       const fileName = `金豆库管_${localDateKey()}.xlsx`;
-      
-      const { File, Paths } = await import('expo-file-system');
-      const file = new File(Paths.cache, fileName);
-      if (file.exists) file.delete();
-      await file.write(wbout, { encoding: 'base64' });
-      await Share.share({ url: file.uri, title: '金豆库管数据导出' });
+      await saveExcelToDownloads(wbout, fileName);
     } catch (e: any) {
       Alert.alert('导出失败', e.message || '未知错误');
     }
