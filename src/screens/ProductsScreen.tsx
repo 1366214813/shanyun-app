@@ -260,7 +260,8 @@ let savedUri = formImageUri;
 
       {/* 打印数量选择 */}
       <Modal visible={!!printTarget} transparent animationType="fade" onRequestClose={() => setPrintTarget(null)}>
-        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setPrintTarget(null)}>
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPrintTarget(null)} />
           <TouchableOpacity activeOpacity={1} style={[styles.sheetCard, { backgroundColor: tc.card }]} onPress={() => {}}>
             <Text style={[styles.sheetTitle, { color: tc.text }]}>打印吊牌</Text>
             <Text style={[styles.sheetSub, { color: tc.subText }]} numberOfLines={1}>{printTarget?.name}</Text>
@@ -277,7 +278,6 @@ let savedUri = formImageUri;
                 maxLength={4}
                 selectTextOnFocus
                 style={[styles.sheetQtyInput, { color: tc.text, borderColor: tc.border }]}
-                onTouchStart={(e) => e.stopPropagation()}
               />
               <TouchableOpacity style={[styles.sheetQtyBtn, { borderColor: tc.border }]} onPress={() => { const q = Math.min(999, (parseInt(printQtyText, 10) || 1) + 1); setPrintQtyText(String(q)); }}>
                 <Text style={[styles.sheetQtyBtnText, { color: tc.text }]}>+</Text>
@@ -306,7 +306,7 @@ let savedUri = formImageUri;
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
