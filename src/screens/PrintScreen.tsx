@@ -181,14 +181,12 @@ export default function PrintScreen({ navigation }: any) {
     if (Platform.OS !== 'android') return true;
     const apiLevel = Platform.Version as number;
     if (apiLevel >= 31) {
-      const res = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-      ]);
-      return (
-        res[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
-        res[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED
-      );
+      const scan = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
+      if (scan !== PermissionsAndroid.RESULTS.GRANTED) return false;
+      const connect = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
+      if (connect !== PermissionsAndroid.RESULTS.GRANTED) return false;
+      const loc = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+      return loc === PermissionsAndroid.RESULTS.GRANTED;
     }
     const loc = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
     return loc === PermissionsAndroid.RESULTS.GRANTED;
