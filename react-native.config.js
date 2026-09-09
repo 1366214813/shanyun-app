@@ -8,10 +8,5 @@ module.exports = {
         },
       },
     },
-    'react-native-ble-plx': {
-      platforms: {
-        android: false,
-      },
-    },
   },
 };
