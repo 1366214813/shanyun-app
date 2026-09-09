@@ -93,7 +93,7 @@ export default function ProductsScreen() {
         const perm = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) { Alert.alert('权限不足', useCamera ? '请允许使用相机' : '请允许访问相册'); return; }
       }
-      const res = useCamera ? await ImagePicker.launchCameraAsync({ quality: 0.7 }) : await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+      const res = useCamera ? await ImagePicker.launchCameraAsync({ quality: 0.7, mediaTypes: ['images'] }) : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, mediaTypes: ['images'] });
       if (!res.canceled && res.assets[0]) setFormImageUri(res.assets[0].uri);
     } catch { Alert.alert('错误', '选择图片失败'); }
   };
