@@ -444,7 +444,7 @@ function SwipeableItem({ item, index, onToggle, onUpdate, onDelete, tc }: {
 
 export default function OcrScreen() {
   const { status, result, error, recognize } = useOcr();
-  const { addProducts, currentStoreId, markupPercent, theme } = useAppStore();
+  const { addProducts, updateProduct, currentStoreId, markupPercent, theme } = useAppStore();
   const tc = THEMES[theme];
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
