@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, Alert, Modal, ScrollView, Image, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, Alert, Modal, ScrollView, Image, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator, PermissionsAndroid } from 'react-native';
 import { useAppStore, THEMES } from '../store/useAppStore';
 import { formatMoney, genId, genBarcode, categoryEmoji } from '../utils/format';
 import { Product } from '../types';
 import * as ImagePicker from 'expo-image-picker';
-import { File, Directory, Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
 import { printLabel, isConnected } from '../services/PrinterService';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -15,18 +15,19 @@ const SORT_OPTIONS: [ 'name' | 'code' | 'price' | 'stock' | 'time', string ][] =
 ];
 const QTY_PRESETS = [1, 2, 3, 5, 10];
 
-function getDocDir(): Directory { return new Directory(Paths.document, 'product_images'); }
-async function ensureDocDir(): Promise<Directory> {
+function getDocDir(): string { return (FileSystem.documentDirectory || '') + 'product_images/'; }
+async function ensureDocDir(): Promise<string> {
   const dir = getDocDir();
-  if (!dir.exists) dir.create({ idempotent: true });
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   return dir;
 }
 async function saveImagePermanent(uri: string, productId: string): Promise<string> {
   const dir = await ensureDocDir();
   const ext = uri.split('.').pop() || 'jpg';
-  const dest = new File(dir, `${productId}.${ext}`);
-  new File(uri).copy(dest);
-  return dest.uri;
+  const dest = dir + `${productId}.${ext}`;
+  await FileSystem.copyAsync({ from: uri, to: dest });
+  return dest;
 }
 
 export default function ProductsScreen() {
@@ -74,8 +75,24 @@ export default function ProductsScreen() {
 
   const pickFormImage = async (useCamera: boolean) => {
     try {
-      const perm = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { Alert.alert('权限不足', useCamera ? '请允许使用相机' : '请允许访问相册'); return; }
+      if (Platform.OS === 'android') {
+        if (useCamera) {
+          const cam = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+          if (cam !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('权限不足', '请允许使用相机'); return; }
+        } else {
+          const apiLevel = Platform.Version as number;
+          if (apiLevel >= 33) {
+            const media = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+            if (media !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('权限不足', '请允许访问相册'); return; }
+          } else {
+            const storage = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+            if (storage !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('权限不足', '请允许访问相册'); return; }
+          }
+        }
+      } else {
+        const perm = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert('权限不足', useCamera ? '请允许使用相机' : '请允许访问相册'); return; }
+      }
       const res = useCamera ? await ImagePicker.launchCameraAsync({ quality: 0.7 }) : await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
       if (!res.canceled && res.assets[0]) setFormImageUri(res.assets[0].uri);
     } catch { Alert.alert('错误', '选择图片失败'); }
