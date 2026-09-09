@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   Image, ActivityIndicator, Alert, TextInput, Switch,
-  Dimensions,
+  Dimensions, Platform, PermissionsAndroid,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useOcr } from '../hooks/useOcr';
@@ -464,21 +464,42 @@ export default function OcrScreen() {
   const pickImage = async (useCamera: boolean) => {
     try {
       logInfo('OCR', `pickImage: useCamera=${useCamera}`);
-      const permResult = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permResult.granted) { Alert.alert('权限不足', useCamera ? '请允许使用相机' : '请允许访问相册'); return; }
-      const res = useCamera ? await ImagePicker.launchCameraAsync({ quality: 0.8 }) : await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
-      if (!res.canceled && res.assets[0]) {
-        setImageUri(res.assets[0].uri);
-        logInfo('OCR', `图片已选择: ${res.assets[0].uri}`);
-        const response = await fetch(res.assets[0].uri);
-        const buffer = await response.arrayBuffer();
-        logInfo('OCR', `图片大小: ${buffer.byteLength} bytes, 开始识别`);
-        await recognize(buffer, 60000);
-        setImageUri(null);
+      if (Platform.OS === 'android') {
+        if (useCamera) {
+          const cam = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+          if (cam !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('权限不足', '请允许使用相机'); return; }
+        } else {
+          const apiLevel = Platform.Version as number;
+          if (apiLevel >= 33) {
+            const media = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+            if (media !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('权限不足', '请允许访问相册'); return; }
+          } else {
+            const storage = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+            if (storage !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert('权限不足', '请允许访问相册'); return; }
+          }
+        }
+      } else {
+        const permResult = useCamera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permResult.granted) { Alert.alert('权限不足', useCamera ? '请允许使用相机' : '请允许访问相册'); return; }
       }
+      const res = useCamera
+        ? await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.8, allowsEditing: false, mediaTypes: ['images'] });
+      if (res.canceled || !res.assets || res.assets.length === 0) return;
+      const asset = res.assets[0];
+      setImageUri(asset.uri);
+      logInfo('OCR', `图片已选择: ${asset.uri}`);
+      const response = await fetch(asset.uri);
+      if (!response.ok) throw new Error(`读取图片失败: ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength === 0) throw new Error('图片数据为空');
+      logInfo('OCR', `图片大小: ${buffer.byteLength} bytes, 开始识别`);
+      await recognize(buffer, 60000);
+      setImageUri(null);
     } catch (err) {
+      setImageUri(null);
       logError('OCR', `pickImage 失败: ${err instanceof Error ? err.message : String(err)}`);
-      Alert.alert('错误', err instanceof Error ? err.message : String(err));
+      Alert.alert('识别失败', err instanceof Error ? err.message : String(err));
     }
   };
 
