@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PaddleOcrService, type RecognitionResult } from "ppu-paddle-ocr/mobile";
 import { Asset } from "expo-asset";
-import { File } from "expo-file-system";
+import * as FileSystem from "expo-file-system";
 import { logInfo, logError } from "../utils/logger";
 
 let sharedService: PaddleOcrService | null = null;
@@ -19,11 +19,21 @@ async function loadBundledModels() {
   const dict = Asset.fromModule(require("../../assets/models/v4_dict.txt"));
   await Promise.all([det.downloadAsync(), rec.downloadAsync(), dict.downloadAsync()]);
 
-  const [detBuf, recBuf, dictBuf] = await Promise.all([
-    new File(det.localUri!).arrayBuffer(),
-    new File(rec.localUri!).arrayBuffer(),
-    new File(dict.localUri!).arrayBuffer(),
+  const [detBase64, recBase64, dictBase64] = await Promise.all([
+    FileSystem.readAsStringAsync(det.localUri!, { encoding: FileSystem.EncodingType.Base64 }),
+    FileSystem.readAsStringAsync(rec.localUri!, { encoding: FileSystem.EncodingType.Base64 }),
+    FileSystem.readAsStringAsync(dict.localUri!, { encoding: FileSystem.EncodingType.Base64 }),
   ]);
+
+  const b64ToBuffer = (b64: string): ArrayBuffer => {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf.buffer;
+  };
+  const detBuf = b64ToBuffer(detBase64);
+  const recBuf = b64ToBuffer(recBase64);
+  const dictBuf = b64ToBuffer(dictBase64);
 
   const dictText = new TextDecoder().decode(dictBuf);
   cachedModels = { detection: detBuf, recognition: recBuf, charactersDictionary: dictBuf };
