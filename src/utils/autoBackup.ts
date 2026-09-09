@@ -82,6 +82,7 @@ export async function autoBackupIfNeeded(
 
     const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
     const fileName = `金豆库管_备份_${today}.xlsx`;
+    if (!FileSystem.documentDirectory) return { backedUp: false };
     const fileUri = FileSystem.documentDirectory + fileName;
     
     await FileSystem.writeAsStringAsync(fileUri, wbout, { encoding: FileSystem.EncodingType.Base64 });
