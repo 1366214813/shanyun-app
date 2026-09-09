@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch, Mo
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as XLSX from 'xlsx';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { useAppStore, THEMES, type ThemeColors, type StoreInfo } from '../store/useAppStore';
 import { getLogs, clearLogs, type LogEntry } from '../utils/logger';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -155,14 +156,12 @@ export default function SettingsScreen() {
       const fileName = result.assets[0].name || fileUri.split('/').pop() || '';
       const isExcel = /\.(xlsx?|csv)$/i.test(fileName);
       
-      const { File } = await import('expo-file-system');
-      const file = new File(fileUri);
-      
       let data: any;
       
       if (isExcel) {
         // Excel导入
-        const arrayBuffer = await file.arrayBuffer();
+        const fileContent = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+        const arrayBuffer = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0)).buffer;
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         data = { products: [], customers: [], orders: [] };
         
@@ -212,7 +211,7 @@ export default function SettingsScreen() {
         }
       } else {
         // JSON导入
-        const jsonStr = await file.text();
+        const jsonStr = await FileSystem.readAsStringAsync(fileUri);
         data = JSON.parse(jsonStr);
       }
       
